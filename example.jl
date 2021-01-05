@@ -256,20 +256,23 @@ end
 L1(thing) = sum(abs.(thing))
 L2(thing) = sum(thing .* thing)
 
-function status_plot()
+function status_plot(θ_holder)
+    tel_model!(tel_model_result, view(θ_holder, 1:3))
+    star_model!(star_model_bary, star_model_result, view(θ_holder, 4:6))
+    rv_model!(rv_model_bary, rv_model_result, M_rv, flux_star_template, view(θ_holder, 7))
+
     l = @layout [a; b]
     # predict_plot = plot_spectrum(; legend = :bottomleft, size=(800,1200), layout = l)
     # predict_plot = plot_spectrum(; xlim=(627.8,628.3), legend=:bottomleft, size=(800,1200), layout = l) # o2
     # predict_plot = plot_spectrum(; xlim=(651.5,652), legend=:bottomleft, size=(800,1200), layout = l)  # h2o
     predict_plot = plot_spectrum(; xlim = (647, 656), legend = :bottomleft, size=(800,1200), layout = l)  # h2o
     plot!(predict_plot[1], obs_λ, true_tels[:, plot_epoch], label="true tel")
-    plot!(predict_plot[1], obs_λ, telluric_obs[:, plot_epoch], label="predicted tel", alpha = 0.5)
-    tel_model!(tel_model_result, view(θ_holder, 1:3))
+    plot!(predict_plot[1], obs_λ, flux_obs[:, plot_epoch] ./ (star_model_result[:, plot_epoch] + rv_model_result[:, plot_epoch]), label="predicted tel", alpha = 0.5)
     plot!(predict_plot[1], obs_λ, tel_model_result[:, plot_epoch], label="model tel: $tracker", alpha = 0.5)
-    plot!(predict_plot[2], exp.(Spectra[plot_epoch].log_λ_bary), Spectra[plot_epoch].flux_obs ./ true_tels[:, plot_epoch], label="obs / true tel", )
-    star_model!(star_model_bary, star_model_result, M_rv, s_rv, view(θ_holder, 4:6))
-    plot!(predict_plot[2], λ_star_template, flux_bary[:, plot_epoch], label="predicted star", alpha = 0.5)
-    plot!(predict_plot[2], λ_star_template, star_model_bary[:, plot_epoch] .+ 1, label="model star: $tracker", alpha = 0.5)
+    plot_bary_λs = exp.(Spectra[plot_epoch].log_λ_bary)
+    plot!(predict_plot[2], plot_bary_λs, flux_obs[:, plot_epoch] ./ true_tels[:, plot_epoch], label="true star", )
+    plot!(predict_plot[2], plot_bary_λs, flux_obs[:, plot_epoch] ./ tel_model_result[:, plot_epoch], label="predicted star", alpha = 0.5)
+    plot!(predict_plot[2], plot_bary_λs, star_model_result[:, plot_epoch] + rv_model_result[:, plot_epoch], label="model star: $tracker", alpha = 0.5)
     display(predict_plot)
 end
 
@@ -328,14 +331,8 @@ end
 star_model_result = ones(size(telluric_obs))
 star_model_bary = ones(size(flux_bary))
 gpx_template = SOAP_gp(log_λ_star_template, SOAP_gp_ridge)
-function star_model!(star_model_bary, star_model_result, M_rv, s_rv, θ)
-    # α = Σ_bary \ ((M_rv * s_rv) + linear_model(θ))
-    # for i in 1:n_obs
-    #     # Σ_obs_bary[:,:] = cov(SOAP_gp_slow(Spectra[i].log_λ_bary), SOAP_gp_slow_bary_temp)  # 4s
-    #     Σ_obs_bary[:,:] = load("E:/telfitting/Sigma_obs_bary_$i.jld2", "Σ_obs_bary")  # 1s
-    #     star_model_result[:, i] = Σ_obs_bary * α[:, i]
-    # end
-    star_model_bary[:, :] = ((M_rv * s_rv) + linear_model(θ)) .- 1
+function star_model!(star_model_bary, star_model_result, θ)
+    star_model_bary[:, :] = linear_model(θ) .- 1
     for i = 1:n_obs
         star_model_result[:, i] = get_mean_GP(
             gpx_template,
@@ -343,6 +340,7 @@ function star_model!(star_model_bary, star_model_result, M_rv, s_rv, θ)
             Spectra[i].log_λ_bary)
     end
     star_model_result .+= 1
+    star_model_bary .+= 1
 end
 star_prior(θ) = model_prior(θ, [2e-2, 1e-2, 1e2, 1e5, 1e6])
 
@@ -356,7 +354,7 @@ rv_model_bary = ones(size(star_model_bary))
 rv_model_result = ones(size(telluric_obs))
 function rv_model!(rv_model_bary, rv_model_result, M_rv, flux_star_template, θ)
     M_rv[:] = calc_doppler_component_RVSKL(λ_star_template, flux_star_template)
-    rv_model_bary[:, :] = M_rv * θ
+    rv_model_bary[:, :] = M_rv * θ[1]
     for i = 1:n_obs
         rv_model_result[:, i] = get_mean_GP(
             gpx_template,
@@ -364,20 +362,20 @@ function rv_model!(rv_model_bary, rv_model_result, M_rv, flux_star_template, θ)
             Spectra[i].log_λ_bary)
     end
 end
+M_rv, s_rv = M_star[:, 1], s_star[1, :]'
+rv_model!(rv_model_bary, rv_model_result, M_rv, flux_star_template, [s_rv])
 
-function loss(telluric_obs, obs_var, θ)
-    tel_model!(tel_model_result, view(θ, 1:3))
-    star_model!(star_model_bary, star_model_result, M_rv, s_rv, view(θ, 4:6))
-    return sum((((tel_model_result .* star_model_result) - flux_obs) .^ 2) ./ obs_var) + tel_prior(view(θ, 1:3)) + star_prior(view(θ, 4:6))
-end
-function tel_loss(telluric_obs, obs_var, θ)
-    tel_model!(tel_model_result, θ)
-    return sum((((tel_model_result .* star_model_result) - flux_obs) .^ 2) ./ obs_var) + tel_prior(view(θ, 1:3)) + star_prior(view(θ, 4:6))
-end
-function loss(telluric_obs, obs_var, θ)
-    tel_model!(tel_model_result, view(θ, 1:3))
-    star_model!(star_model_bary, star_model_result, M_rv, s_rv, view(θ, 4:6))
-    return sum((((tel_model_result .* star_model_result) - flux_obs) .^ 2) ./ obs_var) + tel_prior(view(θ, 1:3)) + star_prior(view(θ, 4:6))
+_loss(tel_model_result, star_model_result, rv_model_result) =
+    sum((((tel_model_result .* (star_model_result + rv_model_result)) - flux_obs) .^ 2) ./ obs_var)
+
+function loss(θ; vary_tel::Bool=false, vary_star::Bool=false, vary_rv::Bool=false)
+    if vary_tel;  tel_model!(tel_model_result, view(θ, 1:3)) end
+    if vary_star; star_model!(star_model_bary, star_model_result, view(θ, 4:6)) end
+    if vary_rv;   rv_model!(rv_model_bary, rv_model_result, M_rv, flux_star_template, view(θ, 7)) end
+    ans = _loss(tel_model_result, star_model_result, rv_model_result)
+    if vary_tel;  ans += tel_prior(view(θ, 1:3)) end
+    if vary_star; ans += star_prior(view(θ, 4:6)) end
+    return ans
 end
 
 function θ_holder!(θ_holder, θ, inds)
@@ -393,20 +391,39 @@ function θ_holder_to_θ(θ_holder, inds)
     return θ
 end
 
-function f(θ)
+function f_tel(θ)
     θ_holder!(θ_holder, θ, inds_hold)
     return loss(telluric_obs, obs_var, θ)
 end
-function g!(G, θ)
+function g_tel!(G, θ)
     θ_holder!(θ_holder, θ, inds_hold)
-    grads = gradient((θ_holder) -> loss(telluric_obs, obs_var, θ_holder), θ_holder)[1]
+    grads = gradient((θ_holder) -> loss(θ_holder; vary_tel=true), θ_holder)[1]
     for i in 1:length(inds_hold)
         G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
     end
 end
-
-_, M_star, s_star, _, rvs_notel = DPCA(flux_bary, λ_star_template; template = flux_star_template)
-
+function f_star(θ)
+    θ_holder!(θ_holder, θ, inds_hold)
+    return loss(telluric_obs, obs_var, θ)
+end
+function g_star!(G, θ)
+    θ_holder!(θ_holder, θ, inds_hold)
+    grads = gradient((θ_holder) -> loss(θ_holder; vary_star=true), θ_holder)[1]
+    for i in 1:length(inds_hold)
+        G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
+    end
+end
+function f_rv(θ)
+    θ_holder!(θ_holder, θ, inds_hold)
+    return loss(telluric_obs, obs_var, θ)
+end
+function g_rv!(G, θ)
+    θ_holder!(θ_holder, θ, inds_hold)
+    grads = gradient((θ_holder) -> loss(θ_holder; vary_rv=true), θ_holder)[1]
+    for i in 1:length(inds_hold)
+        G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
+    end
+end
 
 @time reset_fit!()
 
@@ -415,7 +432,7 @@ M_star_var, s_star_var = M_star[:, 2:3], s_star[2:3, :]
 # s_rv ./= 5
 # s_star_var ./= 5
 
-θ_holder = [M_tel, s_tel, flux_telluric_guess, M_star_var, s_star_var, flux_star_template]
+θ_holder = [M_tel, s_tel, flux_telluric_guess, M_star_var, s_star_var, flux_star_template, s_rv]
 
 inds_hold = [1:length(θ_holder[1])]
 for i in 2:length(θ_holder)
@@ -423,10 +440,13 @@ for i in 2:length(θ_holder)
 end
 
 resid_stds = [std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise)]
-losses = [loss(telluric_obs, obs_var, θ_holder)]
+losses = [loss(θ_holder)]
 tracker = 0
 
-status_plot()
+status_plot(θ_holder)
+OOptions = Optim.Options(iterations=30, f_tol=1e-3, g_tol=1e5)
+
+optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
 
 println("guess $tracker, std=$(round(std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise), digits=5))")
 for i = 1:6
@@ -456,7 +476,7 @@ for i = 1:6
     println("tel loss, data  = $(tel_loss_data(telluric_obs, obs_var, θ_holder_tel)), prior = $(tel_prior(θ_holder_tel))")
     println("star loss, data = $(star_loss_data(M_rv, s_rv, flux_bary, var_bary, θ_holder_star)), prior = $(star_prior(θ_holder_star))")
     println("rv std          = $(round(std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise), digits=5))")
-    status_plot()
+    status_plot(θ_holder)
 end
 plot(resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS", legend=false)
 plot(tel_losses; xlabel="iter", ylabel="tel loss", legend=false)
