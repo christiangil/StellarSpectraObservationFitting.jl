@@ -141,12 +141,12 @@ function est_flux_bary!(
     end
 end
 est_flux_bary!(flux_bary, var_bary, telluric_obs)
-flux_star_template = make_template(flux_bary)
-_, _, _, _, rvs_naive = DPCA(flux_bary, λ_star_template; template=flux_star_template, num_components=1)
+μ_star = make_template(flux_bary)
+_, _, _, _, rvs_naive = DPCA(flux_bary, λ_star_template; template=μ_star, num_components=1)
 
 predict_plot = plot_spectrum(; legend = :bottomright, size=(1200, 800))
 # predict_plot = plot_spectrum(; xlim = (627.8, 628.3), legend = :bottomright)
-plot!(predict_plot, λ_star_template, flux_star_template, st=:line, lw=1, label="Predicted Quiet")
+plot!(predict_plot, λ_star_template, μ_star, st=:line, lw=1, label="Predicted Quiet")
 plot!(predict_plot, λ_nu[inds], quiet[inds], st=:line, lw=1, label="SOAP Quiet", alpha = 0.5)
 plot!(predict_plot, obs_λ, true_tels_mean, st=:line, lw=2, label="average telluric", alpha = 0.5)
 png(predict_plot, "figs/test3.png")
@@ -181,9 +181,9 @@ function est_tellurics!(
     end
 end
 
-est_tellurics!(telluric_obs, repeat(flux_star_template, 1, n_obs), ones(size(flux_bary)) * SOAP_gp_ridge)
-flux_telluric_guess = make_template(telluric_obs)
-_, M_tel, s_tel, _ = fit_gen_pca(telluric_obs; num_components=2, mu=flux_telluric_guess)
+est_tellurics!(telluric_obs, repeat(μ_star, 1, n_obs), ones(size(flux_bary)) * SOAP_gp_ridge)
+μ_tel = make_template(telluric_obs)
+_, M_tel, s_tel, _ = fit_gen_pca(telluric_obs; num_components=2, mu=μ_tel)
 
 ## telluric sanity check plots
 
@@ -194,18 +194,18 @@ predict_plot = plot_spectrum(; legend = :bottomright, size=(1200, 800))
 # zoom in on h2o lines
 # predict_plot = plot_spectrum(; xlim=(651.5,652), legend=:bottomright)
 plot!(predict_plot, obs_λ, true_tels_mean / norm(true_tels_mean), st=:line, lw=1.5, label="Average Telluric")
-plot!(predict_plot, obs_λ, flux_telluric_guess / norm(flux_telluric_guess), st=:line, lw=1, label="Telluric guess mean", alpha=0.8)
+plot!(predict_plot, obs_λ, μ_tel / norm(μ_tel), st=:line, lw=1, label="Telluric guess mean", alpha=0.8)
 # plot!(predict_plot, obs_λ, M_tel[:,1], st=:line, lw=1, label="Telluric guess component 1", alpha=0.5)
 # plot!(predict_plot, obs_λ, M_tel[:,2], st=:line, lw=1, label="Telluric guess component 2", alpha=0.5)
 png(predict_plot, "figs/test6.png")
 
 ## 3) Use estimated tellurics template to make first pass at improving RVs
 
-est_flux_bary!(flux_bary, var_bary, repeat(flux_telluric_guess, 1, n_obs))
+est_flux_bary!(flux_bary, var_bary, repeat(μ_tel, 1, n_obs))
 # est_flux_bary!(flux_bary, var_bary, telluric_obs .+ M_tel * s_tel)
 
-flux_star_template = make_template(flux_bary)
-_, M_star, s_star, _, rvs_notel = DPCA(flux_bary, λ_star_template; template = flux_star_template)
+μ_star = make_template(flux_bary)
+_, M_star, s_star, _, rvs_notel = DPCA(flux_bary, λ_star_template; template = μ_star)
 
 # Compare second guess at RVs to true signal
 predict_plot = plot_rv()
@@ -229,9 +229,9 @@ std(rvs_activ_no_noise)
 
 ## What do tellurics at each time look like?
 
-est_tellurics!(telluric_obs, repeat(flux_star_template, 1, n_obs), var_bary)
-flux_telluric_guess = make_template(telluric_obs)
-_, M_tel, s_tel, _ = fit_gen_pca(telluric_obs; num_components=2, mu=flux_telluric_guess)
+est_tellurics!(telluric_obs, repeat(μ_star, 1, n_obs), var_bary)
+μ_tel = make_template(telluric_obs)
+_, M_tel, s_tel, _ = fit_gen_pca(telluric_obs; num_components=2, mu=μ_tel)
 
 plot_epoch = 60
 predict_plot = plot_spectrum(; legend = :bottomright, size=(1200, 800))
@@ -239,11 +239,11 @@ predict_plot = plot_spectrum(; legend = :bottomright, size=(1200, 800))
 # predict_plot = plot_spectrum(; xlim=(627.8,628.3), legend=:bottomright)
 # zoom in on h2o lines
 # predict_plot = plot_spectrum(; xlim=(651.5,652), legend=:bottomright, size=(1200,800))
-plot!(predict_plot, obs_λ, true_tels[:, plot_epoch], #- flux_telluric_guess,
+plot!(predict_plot, obs_λ, true_tels[:, plot_epoch], #- μ_tel,
     st=:line, lw=2, label="actual tels - telluric template")
-plot!(predict_plot, obs_λ, telluric_obs[:, plot_epoch], #- flux_telluric_guess,
+plot!(predict_plot, obs_λ, telluric_obs[:, plot_epoch], #- μ_tel,
     st=:line, lw=1.5, label="obs / stellar - telluric template", alpha=0.8)
-plot!(predict_plot, obs_λ, (M_tel*s_tel)[:, plot_epoch] + flux_telluric_guess, st=:line, lw=1, label="basis * scores", alpha=0.8)
+plot!(predict_plot, obs_λ, (M_tel*s_tel)[:, plot_epoch] + μ_tel, st=:line, lw=1, label="basis * scores", alpha=0.8)
 
 
 ## fit star
@@ -257,9 +257,9 @@ L1(thing) = sum(abs.(thing))
 L2(thing) = sum(thing .* thing)
 
 function status_plot(θ_holder)
-    tel_model!(tel_model_result, view(θ_holder, 1:3))
-    star_model!(star_model_bary, star_model_result, view(θ_holder, 4:6))
-    rv_model!(rv_model_bary, rv_model_result, M_rv, flux_star_template, view(θ_holder, 7))
+    tel_model_result[:,:] = tel_model(view(θ_holder, 1:3))
+    star_model_result[:, :] = star_model(view(θ_holder, 4:6))
+    rv_model_result[:, :] = rv_model(μ_star, view(θ_holder, 7))
 
     l = @layout [a; b]
     # predict_plot = plot_spectrum(; legend = :bottomleft, size=(800,1200), layout = l)
@@ -284,37 +284,37 @@ function reset_fit!()
 
     # model everything as stellar variability
     est_flux_bary!(flux_bary, var_bary, telluric_obs)
-    flux_star_template[:] = make_template(flux_bary)
+    μ_star[:] = make_template(flux_bary)
     _, M_star[:, :], s_star[:, :], _, rvs_notel[:] =
-        DPCA(flux_bary, λ_star_template; template = flux_star_template)
+        DPCA(flux_bary, λ_star_template; template = μ_star)
 
 
     # telluric model with stellar template
     est_tellurics!(
         telluric_obs,
-        repeat(flux_star_template, 1, n_obs),
+        repeat(μ_star, 1, n_obs),
         # ones(size(flux_bary)) * SOAP_gp_ridge,
         var_bary,
     )
-    flux_telluric_guess[:] = make_template(telluric_obs)
+    μ_tel[:] = make_template(telluric_obs)
     _, M_tel[:, :], s_tel[:, :], _ =
-        fit_gen_pca(telluric_obs; num_components=2, mu=flux_telluric_guess)
+        fit_gen_pca(telluric_obs; num_components=2, mu=μ_tel)
 
     # stellar model with telluric template
-    est_flux_bary!(flux_bary, var_bary, repeat(flux_telluric_guess, 1, n_obs))
-    flux_star_template[:] = make_template(flux_bary)
+    est_flux_bary!(flux_bary, var_bary, repeat(μ_tel, 1, n_obs))
+    μ_star[:] = make_template(flux_bary)
     _, M_star[:, :], s_star[:, :], _, rvs_notel[:] =
-        DPCA(flux_bary, λ_star_template; template = flux_star_template)
+        DPCA(flux_bary, λ_star_template; template = μ_star)
 
     # telluric model with updated stellar template
     est_tellurics!(
         telluric_obs,
-        repeat(flux_star_template, 1, n_obs),
+        repeat(μ_star, 1, n_obs),
         var_bary,
     )
-    flux_telluric_guess[:] = make_template(telluric_obs)
+    μ_tel[:] = make_template(telluric_obs)
     _, M_tel[:, :], s_tel[:, :], _ =
-        fit_gen_pca(telluric_obs; num_components=2, mu=flux_telluric_guess)
+        fit_gen_pca(telluric_obs; num_components=2, mu=μ_tel)
 end
 
 linear_model(θ) = (θ[1] * θ[2]) .+ θ[3]  # M * s + template
@@ -329,54 +329,53 @@ function model_prior(θ, coeffs::Vector{<:Real})
 end
 
 star_model_result = ones(size(telluric_obs))
-star_model_bary = ones(size(flux_bary))
 gpx_template = SOAP_gp(log_λ_star_template, SOAP_gp_ridge)
-function star_model!(star_model_bary, star_model_result, θ)
-    star_model_bary[:, :] = linear_model(θ) .- 1
+function star_model(θ)
+    star_model_bary = linear_model(θ) .- 1
+    star_model_result = ones(size(telluric_obs))
     for i = 1:n_obs
         star_model_result[:, i] = get_mean_GP(
             gpx_template,
             view(star_model_bary, :, i),
             Spectra[i].log_λ_bary)
     end
-    star_model_result .+= 1
-    star_model_bary .+= 1
+    return star_model_result .+ 1
 end
 star_prior(θ) = model_prior(θ, [2e-2, 1e-2, 1e2, 1e5, 1e6])
 
 tel_model_result = ones(size(telluric_obs))
-function tel_model!(tel_model_result, θ)
-    tel_model_result[:, :] = linear_model(θ)
-end
+tel_model(θ) = linear_model(θ)
 tel_prior(θ) = model_prior(θ, [2e2, 1e2, 1e3, 1e3, 1e6])
 
-rv_model_bary = ones(size(star_model_bary))
 rv_model_result = ones(size(telluric_obs))
-function rv_model!(rv_model_bary, rv_model_result, M_rv, flux_star_template, θ)
-    M_rv[:] = calc_doppler_component_RVSKL(λ_star_template, flux_star_template)
-    rv_model_bary[:, :] = M_rv * θ[1]
+function rv_model(μ_star, θ)
+    rv_model_bary = calc_doppler_component_RVSKL(λ_star_template, μ_star) * θ[1]
+    rv_model_result = ones(size(telluric_obs))
     for i = 1:n_obs
         rv_model_result[:, i] = get_mean_GP(
             gpx_template,
             view(rv_model_bary, :, i),
             Spectra[i].log_λ_bary)
     end
+    return rv_model_result
 end
 M_rv, s_rv = M_star[:, 1], s_star[1, :]'
-rv_model!(rv_model_bary, rv_model_result, M_rv, flux_star_template, [s_rv])
+rv_model_result[:, :] = rv_model(μ_star, [s_rv])
 
 _loss(tel_model_result, star_model_result, rv_model_result) =
     sum((((tel_model_result .* (star_model_result + rv_model_result)) - flux_obs) .^ 2) ./ obs_var)
 
-function loss(θ; vary_tel::Bool=false, vary_star::Bool=false, vary_rv::Bool=false)
-    if vary_tel;  tel_model!(tel_model_result, view(θ, 1:3)) end
-    if vary_star; star_model!(star_model_bary, star_model_result, view(θ, 4:6)) end
-    if vary_rv;   rv_model!(rv_model_bary, rv_model_result, M_rv, flux_star_template, view(θ, 7)) end
-    ans = _loss(tel_model_result, star_model_result, rv_model_result)
-    if vary_tel;  ans += tel_prior(view(θ, 1:3)) end
-    if vary_star; ans += star_prior(view(θ, 4:6)) end
-    return ans
+function loss(θ;
+    tel_model_result = tel_model(view(θ, 1:3)),
+    star_model_result = star_model(view(θ, 4:6)),
+    rv_model_result = rv_model(μ_star, view(θ, 7)))
+    return _loss(tel_model_result, star_model_result, rv_model_result)
 end
+loss_tel(θ) = loss(θ; star_model_result=star_model_result, rv_model_result=rv_model_result) +
+    tel_prior(view(θ, 1:3))
+loss_star(θ) = loss(θ; tel_model_result=tel_model_result, rv_model_result=rv_model_result) +
+    star_prior(view(θ, 4:6))
+loss_rv(θ) = loss(θ; tel_model_result=tel_model_result, star_model_result=star_model_result)
 
 function θ_holder!(θ_holder, θ, inds)
     for i in 1:length(θ_holder)
@@ -393,35 +392,47 @@ end
 
 function f_tel(θ)
     θ_holder!(θ_holder, θ, inds_hold)
-    return loss(telluric_obs, obs_var, θ)
+    return loss_tel(θ_holder)
 end
 function g_tel!(G, θ)
     θ_holder!(θ_holder, θ, inds_hold)
-    grads = gradient((θ_holder) -> loss(θ_holder; vary_tel=true), θ_holder)[1]
+    grads = gradient((θ_holder) -> loss_tel(θ_holder), θ_holder)[1]
     for i in 1:length(inds_hold)
-        G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
+        if isnothing(grads[i])
+            G[inds_hold[i]] .= 0
+        else
+            G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
+        end
     end
 end
 function f_star(θ)
     θ_holder!(θ_holder, θ, inds_hold)
-    return loss(telluric_obs, obs_var, θ)
+    return loss_star(θ_holder)
 end
 function g_star!(G, θ)
     θ_holder!(θ_holder, θ, inds_hold)
-    grads = gradient((θ_holder) -> loss(θ_holder; vary_star=true), θ_holder)[1]
+    grads = gradient((θ_holder) -> loss_star(θ_holder), θ_holder)[1]
     for i in 1:length(inds_hold)
-        G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
+        if isnothing(grads[i])
+            G[inds_hold[i]] .= 0
+        else
+            G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
+        end
     end
 end
 function f_rv(θ)
     θ_holder!(θ_holder, θ, inds_hold)
-    return loss(telluric_obs, obs_var, θ)
+    return loss_rv(θ_holder)
 end
 function g_rv!(G, θ)
     θ_holder!(θ_holder, θ, inds_hold)
-    grads = gradient((θ_holder) -> loss(θ_holder; vary_rv=true), θ_holder)[1]
+    grads = gradient((θ_holder) -> loss_rv(θ_holder), θ_holder)[1]
     for i in 1:length(inds_hold)
-        G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
+        if isnothing(grads[i])
+            G[inds_hold[i]] .= 0
+        else
+            G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
+        end
     end
 end
 
@@ -432,7 +443,7 @@ M_star_var, s_star_var = M_star[:, 2:3], s_star[2:3, :]
 # s_rv ./= 5
 # s_star_var ./= 5
 
-θ_holder = [M_tel, s_tel, flux_telluric_guess, M_star_var, s_star_var, flux_star_template, s_rv]
+θ_holder = [M_tel, s_tel, μ_tel, M_star_var, s_star_var, μ_star, s_rv]
 
 inds_hold = [1:length(θ_holder[1])]
 for i in 2:length(θ_holder)
@@ -444,9 +455,15 @@ losses = [loss(θ_holder)]
 tracker = 0
 
 status_plot(θ_holder)
-OOptions = Optim.Options(iterations=30, f_tol=1e-3, g_tol=1e5)
+OOptions = Optim.Options(iterations=1, f_tol=1e-3, g_tol=1e5)
 
-optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
+# using Profile
+# using Juno
+@profile optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
+# Juno.profiler()
+
+optimize(f_rv, g_rv!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
+optimize(f_star, g_star!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
 
 println("guess $tracker, std=$(round(std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise), digits=5))")
 for i = 1:6
@@ -456,17 +473,17 @@ for i = 1:6
     # fit tellurics
     @time optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder_tel, inds_tel), LBFGS(),
         Optim.Options(iterations=30, f_tol=1e-3, g_tol=1e5))
-    M_tel[:,:], s_tel[:,:], flux_telluric_guess[:] = θ_holder_tel
+    M_tel[:,:], s_tel[:,:], μ_tel[:] = θ_holder_tel
     est_flux_bary!(flux_bary, var_bary, tel_model(θ_holder_tel))
 
     # fit RV
     _, M_rv[:], s_rv[:], _, rvs_notel[:] = DPCA(flux_bary, λ_star_template;
-        template=flux_star_template, num_components=1)
+        template=μ_star, num_components=1)
 
     # fit stellar variability
     @time optimize(f_star, g_star!, θ_holder_to_θ(θ_holder_star, inds_star), LBFGS(),
         Optim.Options(iterations=30, f_tol=1e-3, g_tol=1e5))
-    M_star_var[:,:], s_star_var[:,:], flux_star_template[:] = θ_holder_star
+    M_star_var[:,:], s_star_var[:,:], μ_star[:] = θ_holder_star
     est_tellurics!(telluric_obs, star_model(M_rv, s_rv, θ_holder_star), var_bary)
 
     append!(resid_stds, [std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise)])
