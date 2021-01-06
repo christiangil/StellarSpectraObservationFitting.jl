@@ -390,47 +390,23 @@ function θ_holder_to_θ(θ_holder, inds)
     return θ
 end
 
-function f_tel(θ)
-    θ_holder!(θ_holder, θ, inds_hold[1:3])
-    return loss_tel(θ_holder[1:3])
+function f(θ, θ_inds, loss_func)
+    θ_holder!(θ_holder, θ, inds_hold[θ_inds])
+    return loss_func(θ_holder[θ_inds])
 end
-function g_tel!(G, θ)
-    θ_holder!(θ_holder, θ, inds_hold[1:3])
-    grads = gradient((θ_hold) -> loss_tel(θ_hold), θ_holder[1:3])[1]
+f_tel(θ) = f(θ, 1:3, loss_tel)
+f_star(θ) = f(θ, 4:6, loss_star)
+f_rv(θ) = f(θ, 7:7, loss_rv)
+function g!(G, θ, θ_inds)
+    θ_holder!(θ_holder, θ, inds_hold[θ_inds])
+    grads = gradient((θ_hold) -> loss_tel(θ_hold), θ_holder[θ_inds])[1]
     for i in 1:3
-        G[inds_hold[i]] = collect(Iterators.flatten(grads[i-0]))
+        G[inds_hold[i]] = collect(Iterators.flatten(grads[i+1-θ_inds[1]]))
     end
 end
-function f_star(θ)
-    θ_holder!(θ_holder, θ, inds_hold)
-    return loss_star(θ_holder)
-end
-function g_star!(G, θ)
-    θ_holder!(θ_holder, θ, inds_hold)
-    grads = gradient((θ_holder) -> loss_star(θ_holder), θ_holder)[1]
-    for i in 1:length(inds_hold)
-        if isnothing(grads[i])
-            G[inds_hold[i]] .= 0
-        else
-            G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
-        end
-    end
-end
-function f_rv(θ)
-    θ_holder!(θ_holder, θ, inds_hold)
-    return loss_rv(θ_holder)
-end
-function g_rv!(G, θ)
-    θ_holder!(θ_holder, θ, inds_hold)
-    grads = gradient((θ_holder) -> loss_rv(θ_holder), θ_holder)[1]
-    for i in 1:length(inds_hold)
-        if isnothing(grads[i])
-            G[inds_hold[i]] .= 0
-        else
-            G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
-        end
-    end
-end
+g_tel!(θ) = g!(G, θ, 1:3, loss_tel)
+g_star!(θ) = g!(G, θ, 4:6, loss_star)
+g_rv!(θ) = g!(G, θ, 7:7, loss_rv)
 
 @time reset_fit!()
 
@@ -454,6 +430,7 @@ status_plot(θ_holder)
 OOptions = Optim.Options(iterations=1, f_tol=1e-3, g_tol=1e5)
 
 # using Profile
+
 # using Juno
 # @profile optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
 # Juno.profiler()
