@@ -371,14 +371,14 @@ function loss(θ;
     rv_model_result = rv_model(μ_star, view(θ, 7)))
     return _loss(tel_model_result, star_model_result, rv_model_result)
 end
-loss_tel(θ) = loss(θ; star_model_result=star_model_result, rv_model_result=rv_model_result) +
-    tel_prior(view(θ, 1:3))
+loss_tel(θ) = _loss(tel_model(θ), star_model_result, rv_model_result) +
+    tel_prior(θ)
 loss_star(θ) = loss(θ; tel_model_result=tel_model_result, rv_model_result=rv_model_result) +
     star_prior(view(θ, 4:6))
 loss_rv(θ) = loss(θ; tel_model_result=tel_model_result, star_model_result=star_model_result)
 
 function θ_holder!(θ_holder, θ, inds)
-    for i in 1:length(θ_holder)
+    for i in 1:length(inds)
         θ_holder[i][:,:] = reshape(θ[inds[i]], size(θ_holder[i]))
     end
 end
@@ -391,18 +391,14 @@ function θ_holder_to_θ(θ_holder, inds)
 end
 
 function f_tel(θ)
-    θ_holder!(θ_holder, θ, inds_hold)
-    return loss_tel(θ_holder)
+    θ_holder!(θ_holder, θ, inds_hold[1:3])
+    return loss_tel(θ_holder[1:3])
 end
 function g_tel!(G, θ)
-    θ_holder!(θ_holder, θ, inds_hold)
-    grads = gradient((θ_holder) -> loss_tel(θ_holder), θ_holder)[1]
-    for i in 1:length(inds_hold)
-        if isnothing(grads[i])
-            G[inds_hold[i]] .= 0
-        else
-            G[inds_hold[i]] = collect(Iterators.flatten(grads[i]))
-        end
+    θ_holder!(θ_holder, θ, inds_hold[1:3])
+    grads = gradient((θ_hold) -> loss_tel(θ_hold), θ_holder[1:3])[1]
+    for i in 1:3
+        G[inds_hold[i]] = collect(Iterators.flatten(grads[i-0]))
     end
 end
 function f_star(θ)
@@ -459,9 +455,9 @@ OOptions = Optim.Options(iterations=1, f_tol=1e-3, g_tol=1e5)
 
 # using Profile
 # using Juno
-@profile optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
+# @profile optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
 # Juno.profiler()
-
+optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
 optimize(f_rv, g_rv!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
 optimize(f_star, g_star!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
 
