@@ -22,6 +22,7 @@ using FileIO
 include("../src/general_functions.jl")
 include("../src/PCA_functions.jl")
 include("../src/SOAP_functions.jl")
+include("../src/interpolation_functions.jl")
 include("D:/Christian/Documents/GitHub/GLOM_RV_Example/src/GLOM_RV_Example.jl")
 GLOM_RV = Main.GLOM_RV_Example
 
@@ -335,10 +336,13 @@ function star_model(θ)
     star_model_bary = linear_model(θ) .- 1
     star_model_result = ones(size(telluric_obs))
     for i = 1:n_obs
-        star_model_result[:, i] = get_mean_GP(
-            gpx_template,
-            view(star_model_bary, :, i),
-            Spectra[i].log_λ_bary)
+        star_model_result[:, i] = spectra_interpolate(log_λ_star_template,
+            Spectra[i].log_λ_bary,
+            view(star_model_bary, :, i))
+        # star_model_result[:, i] = get_mean_GP(
+        #     gpx_template,
+        #     view(star_model_bary, :, i),
+        #     Spectra[i].log_λ_bary)
     end
     return star_model_result .+ 1
 end
@@ -353,10 +357,13 @@ function rv_model(μ_star, θ)
     rv_model_bary = calc_doppler_component_RVSKL(λ_star_template, μ_star) * θ[1]
     rv_model_result = ones(size(telluric_obs))
     for i = 1:n_obs
-        rv_model_result[:, i] = get_mean_GP(
-            gpx_template,
-            view(rv_model_bary, :, i),
-            Spectra[i].log_λ_bary)
+        rv_model_result[:, i] = spectra_interpolate(log_λ_star_template,
+            Spectra[i].log_λ_bary,
+            view(rv_model_bary, :, i))
+        # rv_model_result[:, i] = get_mean_GP(
+        #     gpx_template,
+        #     view(rv_model_bary, :, i),
+        #     Spectra[i].log_λ_bary)
     end
     return rv_model_result
 end
@@ -429,10 +436,9 @@ losses = [loss(θ_holder)]
 tracker = 0
 
 status_plot(θ_holder)
-OOptions = Optim.Options(iterations=1, f_tol=1e-3, g_tol=1e5)
+OOptions = Optim.Options(iterations=3, f_tol=1e-3, g_tol=1e5)
 
 # using Profile
-
 # using Juno
 # @profile optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
 # Juno.profiler()
