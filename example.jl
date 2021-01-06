@@ -103,9 +103,10 @@ end
 max_bary_z = 2.5 * bary_K / light_speed
 min_temp_wav = (1 - max_bary_z) * min_wav
 max_temp_wav = (1 + max_bary_z) * max_wav
-λ_star_template = log_linspace(min_temp_wav, max_temp_wav,
-    Int(round((max_temp_wav - min_temp_wav) * star_template_res / sqrt(max_temp_wav * min_temp_wav))))
-log_λ_star_template = log.(λ_star_template)
+n_star_template = Int(round((max_temp_wav - min_temp_wav) * star_template_res / sqrt(max_temp_wav * min_temp_wav)))
+log_λ_star_template = RegularSpacing(log(min_temp_wav), (log(max_temp_wav) - log(min_temp_wav)) / n_star_template, n_star_template)
+λ_star_template =  exp.(log_λ_star_template)
+
 len_obs = length(obs_λ)
 len_bary = length(log_λ_star_template)
 telluric_obs = ones(len_obs, n_obs)  # part of model
@@ -397,6 +398,7 @@ end
 f_tel(θ) = f(θ, 1:3, loss_tel)
 f_star(θ) = f(θ, 4:6, loss_star)
 f_rv(θ) = f(θ, 7:7, loss_rv)
+
 function g!(G, θ, θ_inds)
     θ_holder!(θ_holder, θ, inds_hold[θ_inds])
     grads = gradient((θ_hold) -> loss_tel(θ_hold), θ_holder[θ_inds])[1]
