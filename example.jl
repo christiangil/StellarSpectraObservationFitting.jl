@@ -258,10 +258,10 @@ end
 L1(thing) = sum(abs.(thing))
 L2(thing) = sum(thing .* thing)
 
-function status_plot(θ_holder)
-    tel_model_result[:,:] = tel_model(view(θ_holder, 1:3))
-    star_model_result[:, :] = star_model(view(θ_holder, 4:6))
-    rv_model_result[:, :] = rv_model(μ_star, view(θ_holder, 7))
+function status_plot(θ_tot)
+    tel_model_result[:, :] = tel_model(view(θ_tot, 1:3))
+    star_model_result[:, :] = star_model(view(θ_tot, 4:6))
+    rv_model_result[:, :] = rv_model(μ_star, view(θ_tot, 7))
 
     l = @layout [a; b]
     # predict_plot = plot_spectrum(; legend = :bottomleft, size=(800,1200), layout = l)
@@ -330,43 +330,56 @@ function model_prior(θ, coeffs::Vector{<:Real})
     L1(θ[2])
 end
 
-star_model_result = ones(size(telluric_obs))
-gpx_template = SOAP_gp(log_λ_star_template, SOAP_gp_ridge)
-function star_model(θ)
-    star_model_bary = linear_model(θ) .- 1
-    star_model_result = ones(size(telluric_obs))
-    for i = 1:n_obs
-        star_model_result[:, i] = spectra_interpolate(log_λ_star_template,
-            Spectra[i].log_λ_bary,
-            view(star_model_bary, :, i))
-        # star_model_result[:, i] = get_mean_GP(
-        #     gpx_template,
-        #     view(star_model_bary, :, i),
-        #     Spectra[i].log_λ_bary)
-    end
-    return star_model_result .+ 1
-end
-star_prior(θ) = model_prior(θ, [2e-2, 1e-2, 1e2, 1e5, 1e6])
-
 tel_model_result = ones(size(telluric_obs))
 tel_model(θ) = linear_model(θ)
 tel_prior(θ) = model_prior(θ, [2e2, 1e2, 1e3, 1e3, 1e6])
 
-rv_model_result = ones(size(telluric_obs))
-function rv_model(μ_star, θ)
-    rv_model_bary = calc_doppler_component_RVSKL(λ_star_template, μ_star) * θ[1]
-    rv_model_result = ones(size(telluric_obs))
-    for i = 1:n_obs
-        rv_model_result[:, i] = spectra_interpolate(log_λ_star_template,
-            Spectra[i].log_λ_bary,
-            view(rv_model_bary, :, i))
-        # rv_model_result[:, i] = get_mean_GP(
-        #     gpx_template,
-        #     view(rv_model_bary, :, i),
-        #     Spectra[i].log_λ_bary)
+lower_inds = zeros(Int, size(telluric_obs))
+ratios = zeros(size(telluric_obs))
+for j in 1:size(telluric_obs, 2)
+    lower_inds[:, j] = searchsortednearest(log_λ_star_template, Spectra[j].log_λ_bary; lower=true)
+    for i in 1:size(telluric_obs, 1)
+        x1 = log_λ_star_template[lower_inds[i, j]]
+        x2 = log_λ_star_template[lower_inds[i, j]+1]
+        x3 = Spectra[j].log_λ_bary[i]
+        ratios[i, j] = (x3 - x1) / (x2 - x1)
+        lower_inds[i, j] += ((j - 1) * size(telluric_obs, 1))
     end
-    return rv_model_result
 end
+
+# gpx_template = SOAP_gp(log_λ_star_template, SOAP_gp_ridge)
+function spectra_interp(bary_vals)
+    model_result = (bary_vals[lower_inds] .* ratios) + (bary_vals[lower_inds .+ 1] .* (1 .- ratios))
+    # model_result = zeros(size(telluric_obs))
+    # if method == "alt linear"
+    #     for i = 1:n_obs
+    #         model_result[:, i] = LinearInterpolation(log_λ_star_template,
+    #             view(bary_vals, :, i); extrapolation_bc=Line()).(Spectra[i].log_λ_bary)
+    #     end
+    # elseif method == "GP"
+    #     for i = 1:n_obs
+    #         model_result[:, i] = get_mean_GP(
+    #             gpx_template,
+    #             view(bary_vals, :, i) .- 1,
+    #             Spectra[i].log_λ_bary) .+ 1
+    #     end
+    # elseif method == "sinc"
+    #     for i = 1:n_obs
+    #         model_result[:, i] = spectra_interpolate(log_λ_star_template,
+    #             Spectra[i].log_λ_bary,
+    #             view(bary_vals, :, i))
+    #     end
+    # end
+    return model_result
+end
+
+star_model_result = ones(size(telluric_obs))
+star_model(θ; kwargs...) = spectra_interp(linear_model(θ); kwargs...)
+star_prior(θ) = model_prior(θ, [2e-2, 1e-2, 1e2, 1e5, 1e6])
+
+rv_model_result = ones(size(telluric_obs))
+rv_model(μ_star, θ; kwargs...) = _rv_model(calc_doppler_component_RVSKL(λ_star_template, μ_star), θ; kwargs...)
+_rv_model(dop_comp, θ; kwargs...) = spectra_interp(dop_comp * θ[1]; kwargs...)
 M_rv, s_rv = M_star[:, 1], s_star[1, :]'
 rv_model_result[:, :] = rv_model(μ_star, [s_rv])
 
@@ -381,9 +394,9 @@ function loss(θ;
 end
 loss_tel(θ) = _loss(tel_model(θ), star_model_result, rv_model_result) +
     tel_prior(θ)
-loss_star(θ) = loss(θ; tel_model_result=tel_model_result, rv_model_result=rv_model_result) +
-    star_prior(view(θ, 4:6))
-loss_rv(θ) = loss(θ; tel_model_result=tel_model_result, star_model_result=star_model_result)
+loss_star(θ) = _loss(tel_model_result, star_model(θ), rv_model_result) +
+    star_prior(θ)
+loss_rv(θ) = _loss(tel_model_result, star_model_result, _rv_model(calc_doppler_component_RVSKL(λ_star_template, μ_star), θ))
 
 function θ_holder!(θ_holder, θ, inds)
     for i in 1:length(inds)
@@ -398,53 +411,77 @@ function θ_holder_to_θ(θ_holder, inds)
     return θ
 end
 
-function f(θ, θ_inds, loss_func)
-    θ_holder!(θ_holder, θ, inds_hold[θ_inds])
-    return loss_func(θ_holder[θ_inds])
-end
-f_tel(θ) = f(θ, 1:3, loss_tel)
-f_star(θ) = f(θ, 4:6, loss_star)
-f_rv(θ) = f(θ, 7:7, loss_rv)
-
-function g!(G, θ, θ_inds)
-    θ_holder!(θ_holder, θ, inds_hold[θ_inds])
-    grads = gradient((θ_hold) -> loss_tel(θ_hold), θ_holder[θ_inds])[1]
-    for i in 1:3
-        G[inds_hold[i]] = collect(Iterators.flatten(grads[i+1-θ_inds[1]]))
-    end
-end
-g_tel!(θ) = g!(G, θ, 1:3, loss_tel)
-g_star!(θ) = g!(G, θ, 4:6, loss_star)
-g_rv!(θ) = g!(G, θ, 7:7, loss_rv)
-
 @time reset_fit!()
 
 M_rv, s_rv = M_star[:, 1], s_star[1, :]'
 M_star_var, s_star_var = M_star[:, 2:3], s_star[2:3, :]
+
+θ_tot = [M_tel, s_tel, μ_tel, M_star_var, s_star_var, μ_star, s_rv]
+θ_tel = [M_tel, s_tel, μ_tel]
+θ_star = [M_star_var, s_star_var, μ_star]
+θ_rv = [s_rv]
+
+function relevant_inds(θ_hold)
+    inds = [1:length(θ_hold[1])]
+    for i in 2:length(θ_hold)
+        append!(inds, [(inds[i-1][end]+1):(inds[i-1][end]+length(θ_hold[i]))])
+    end
+    return inds
+end
+inds_tel = relevant_inds(θ_tel)
+inds_star = relevant_inds(θ_star)
+inds_rv = relevant_inds(θ_rv)
+
+function f(θ, θ_holder, inds, loss_func)
+    θ_holder!(θ_holder, θ, inds)
+    return loss_func(θ_holder)
+end
+f_tel(θ) = f(θ, θ_tel, inds_tel, loss_tel)
+f_star(θ) = f(θ, θ_star, inds_star, loss_star)
+f_rv(θ) = f(θ, θ_rv, inds_rv, loss_rv)
+
+function g!(G, θ, θ_holder, inds, loss_func)
+    θ_holder!(θ_holder, θ, inds)
+    grads = gradient((θ_hold) -> loss_func(θ_hold), θ_holder)[1]
+    for i in 1:length(inds)
+        G[inds[i]] = collect(Iterators.flatten(grads[i]))
+    end
+end
+g_tel!(G, θ) = g!(G, θ, θ_tel, inds_tel, loss_tel)
+g_star!(G, θ) = g!(G, θ, θ_star, inds_star, loss_star)
+g_rv!(G, θ) = g!(G, θ, θ_rv, inds_rv, loss_rv)
+
+
 # s_rv ./= 5
 # s_star_var ./= 5
 
-θ_holder = [M_tel, s_tel, μ_tel, M_star_var, s_star_var, μ_star, s_rv]
-
-inds_hold = [1:length(θ_holder[1])]
-for i in 2:length(θ_holder)
-    append!(inds_hold, [(inds_hold[i-1][end]+1):(inds_hold[i-1][end]+length(θ_holder[i]))])
-end
-
 resid_stds = [std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise)]
-losses = [loss(θ_holder)]
+losses = [loss(θ_tot)]
 tracker = 0
 
-status_plot(θ_holder)
+status_plot(θ_tot)
 OOptions = Optim.Options(iterations=3, f_tol=1e-3, g_tol=1e5)
 
-# using Profile
-# using Juno
-# @profile optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
-# Juno.profiler()
-optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
-optimize(f_rv, g_rv!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
-optimize(f_star, g_star!, θ_holder_to_θ(θ_holder, inds_hold), LBFGS(), OOptions)
+optimize(f_tel, g_tel!, θ_holder_to_θ(θ_tel, inds_tel), LBFGS(), OOptions)
+
+using Profile
+using Juno
+Profile.clear()
+@profile g_rv!(ones(length(θ_holder_to_θ(θ_rv, inds_rv))), θ_holder_to_θ(θ_rv, inds_rv))
+Juno.profiler()
+
+
+f_tel(θ_holder_to_θ(θ_tel, inds_tel))
+g_tel!(ones(length(θ_holder_to_θ(θ_tel, inds_tel))), θ_holder_to_θ(θ_tel, inds_tel))
+
+f_rv(θ_holder_to_θ(θ_rv, inds_rv))
+@time g_rv!(ones(length(θ_holder_to_θ(θ_rv, inds_rv))), θ_holder_to_θ(θ_rv, inds_rv))
+
+f_star(θ_holder_to_θ(θ_star, inds_star))
+g_star!(ones(length(θ_holder_to_θ(θ_star, inds_star))), θ_holder_to_θ(θ_star, inds_star))
+
+optimize(f_rv, g_rv!, θ_holder_to_θ(θ_rv, inds_rv), LBFGS(), OOptions)
+optimize(f_star, g_star!, θ_holder_to_θ(θ_star, inds_star), LBFGS(), OOptions)
 
 println("guess $tracker, std=$(round(std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise), digits=5))")
 for i = 1:6
