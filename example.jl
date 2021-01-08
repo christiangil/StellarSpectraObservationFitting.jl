@@ -379,7 +379,7 @@ star_prior(θ) = model_prior(θ, [2e-2, 1e-2, 1e2, 1e5, 1e6])
 
 rv_model_result = ones(size(telluric_obs))
 rv_model(μ_star, θ; kwargs...) = _rv_model(calc_doppler_component_RVSKL(λ_star_template, μ_star), θ; kwargs...)
-_rv_model(dop_comp, θ; kwargs...) = spectra_interp(dop_comp * θ[1]; kwargs...)
+_rv_model(M_rv, θ; kwargs...) = spectra_interp(M_rv * θ[1]; kwargs...)
 M_rv, s_rv = M_star[:, 1], s_star[1, :]'
 rv_model_result[:, :] = rv_model(μ_star, [s_rv])
 
@@ -396,11 +396,14 @@ loss_tel(θ) = _loss(tel_model(θ), star_model_result, rv_model_result) +
     tel_prior(θ)
 loss_star(θ) = _loss(tel_model_result, star_model(θ), rv_model_result) +
     star_prior(θ)
-loss_rv(θ) = _loss(tel_model_result, star_model_result, _rv_model(calc_doppler_component_RVSKL(λ_star_template, μ_star), θ))
+loss_rv(θ) = _loss(tel_model_result, star_model_result, _rv_model(M_rv, θ))
 
-function θ_holder!(θ_holder, θ, inds)
+function θ_holder!(θ_holder, θ, inds; recalc_M_rv::Bool=true)
     for i in 1:length(inds)
         θ_holder[i][:,:] = reshape(θ[inds[i]], size(θ_holder[i]))
+    end
+    if recalc_M_rv
+        M_rv[:, :] = calc_doppler_component_RVSKL(λ_star_template, μ_star)
     end
 end
 function θ_holder_to_θ(θ_holder, inds)
