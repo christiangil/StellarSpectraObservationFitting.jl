@@ -258,10 +258,10 @@ end
 L1(thing) = sum(abs.(thing))
 L2(thing) = sum(thing .* thing)
 
-function status_plot(θ_tot)
+function status_plot(θ_tot; plot_epoch=1)
     tel_model_result[:, :] = tel_model(view(θ_tot, 1:3))
     star_model_result[:, :] = star_model(view(θ_tot, 4:6))
-    rv_model_result[:, :] = rv_model(μ_star, view(θ_tot, 7))
+    rv_model_result[:, :] = _rv_model(M_rv, view(θ_tot, 7))
 
     l = @layout [a; b]
     # predict_plot = plot_spectrum(; legend = :bottomleft, size=(800,1200), layout = l)
@@ -278,7 +278,6 @@ function status_plot(θ_tot)
     display(predict_plot)
 end
 
-
 function reset_fit!()
     telluric_obs[:, :] .= 1  # part of model
     flux_bary[:, :] .= 1  # interpolation / telluric_obs
@@ -288,16 +287,10 @@ function reset_fit!()
     est_flux_bary!(flux_bary, var_bary, telluric_obs)
     μ_star[:] = make_template(flux_bary)
     _, M_star[:, :], s_star[:, :], _, rvs_notel[:] =
-        DPCA(flux_bary, λ_star_template; template = μ_star)
-
+        DPCA(flux_bary, λ_star_template; template=μ_star)
 
     # telluric model with stellar template
-    est_tellurics!(
-        telluric_obs,
-        repeat(μ_star, 1, n_obs),
-        # ones(size(flux_bary)) * SOAP_gp_ridge,
-        var_bary,
-    )
+    est_tellurics!(telluric_obs, repeat(μ_star, 1, n_obs), var_bary)
     μ_tel[:] = make_template(telluric_obs)
     _, M_tel[:, :], s_tel[:, :], _ =
         fit_gen_pca(telluric_obs; num_components=2, mu=μ_tel)
@@ -309,11 +302,7 @@ function reset_fit!()
         DPCA(flux_bary, λ_star_template; template = μ_star)
 
     # telluric model with updated stellar template
-    est_tellurics!(
-        telluric_obs,
-        repeat(μ_star, 1, n_obs),
-        var_bary,
-    )
+    est_tellurics!(telluric_obs, repeat(μ_star, 1, n_obs), var_bary)
     μ_tel[:] = make_template(telluric_obs)
     _, M_tel[:, :], s_tel[:, :], _ =
         fit_gen_pca(telluric_obs; num_components=2, mu=μ_tel)
@@ -332,7 +321,8 @@ end
 
 tel_model_result = ones(size(telluric_obs))
 tel_model(θ) = linear_model(θ)
-tel_prior(θ) = model_prior(θ, [2e2, 1e2, 1e3, 1e3, 1e6])
+# tel_prior(θ) = model_prior(θ, [2e2, 1e2, 1e3, 1e3, 1e6])
+tel_prior(θ) = model_prior(θ, 0. * [2e2, 1e2, 1e3, 1e3, 1e6])
 
 lower_inds = zeros(Int, size(telluric_obs))
 ratios = zeros(size(telluric_obs))
@@ -343,8 +333,8 @@ for j in 1:size(telluric_obs, 2)
         x2 = log_λ_star_template[lower_inds[i, j]+1]
         x3 = Spectra[j].log_λ_bary[i]
         ratios[i, j] = (x3 - x1) / (x2 - x1)
-        lower_inds[i, j] += ((j - 1) * size(telluric_obs, 1))
     end
+    lower_inds[:, j] += (j - 1) * len_bary
 end
 
 # gpx_template = SOAP_gp(log_λ_star_template, SOAP_gp_ridge)
@@ -375,7 +365,8 @@ end
 
 star_model_result = ones(size(telluric_obs))
 star_model(θ; kwargs...) = spectra_interp(linear_model(θ); kwargs...)
-star_prior(θ) = model_prior(θ, [2e-2, 1e-2, 1e2, 1e5, 1e6])
+# star_prior(θ) = model_prior(θ, [2e-2, 1e-2, 1e2, 1e5, 1e6])
+star_prior(θ) = model_prior(θ, 0 .* [2e-2, 1e-2, 1e2, 1e5, 1e6])
 
 rv_model_result = ones(size(telluric_obs))
 rv_model(μ_star, θ; kwargs...) = _rv_model(calc_doppler_component_RVSKL(λ_star_template, μ_star), θ; kwargs...)
@@ -419,6 +410,8 @@ end
 M_rv, s_rv = M_star[:, 1], s_star[1, :]'
 M_star_var, s_star_var = M_star[:, 2:3], s_star[2:3, :]
 
+s_star_var ./= 5
+
 θ_tot = [M_tel, s_tel, μ_tel, M_star_var, s_star_var, μ_star, s_rv]
 θ_tel = [M_tel, s_tel, μ_tel]
 θ_star = [M_star_var, s_star_var, μ_star]
@@ -454,71 +447,45 @@ g_tel!(G, θ) = g!(G, θ, θ_tel, inds_tel, loss_tel)
 g_star!(G, θ) = g!(G, θ, θ_star, inds_star, loss_star)
 g_rv!(G, θ) = g!(G, θ, θ_rv, inds_rv, loss_rv)
 
-
-# s_rv ./= 5
-# s_star_var ./= 5
-
 resid_stds = [std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise)]
 losses = [loss(θ_tot)]
 tracker = 0
 
-status_plot(θ_tot)
-OOptions = Optim.Options(iterations=3, f_tol=1e-3, g_tol=1e5)
+# plot(M_star_var)
+# plot(s_star_var')
+# plot(μ_star)
+#
+# plot(M_tel)
+# plot(s_tel')
+# plot(μ_tel)
+#
+# plot(M_rv)
+# plot(s_rv')
+#
+# plot(star_model(θ_star)[:, 13])
 
-optimize(f_tel, g_tel!, θ_holder_to_θ(θ_tel, inds_tel), LBFGS(), OOptions)
-
-using Profile
-using Juno
-Profile.clear()
-@profile g_rv!(ones(length(θ_holder_to_θ(θ_rv, inds_rv))), θ_holder_to_θ(θ_rv, inds_rv))
-Juno.profiler()
-
-
-f_tel(θ_holder_to_θ(θ_tel, inds_tel))
-g_tel!(ones(length(θ_holder_to_θ(θ_tel, inds_tel))), θ_holder_to_θ(θ_tel, inds_tel))
-
-f_rv(θ_holder_to_θ(θ_rv, inds_rv))
-@time g_rv!(ones(length(θ_holder_to_θ(θ_rv, inds_rv))), θ_holder_to_θ(θ_rv, inds_rv))
-
-f_star(θ_holder_to_θ(θ_star, inds_star))
-g_star!(ones(length(θ_holder_to_θ(θ_star, inds_star))), θ_holder_to_θ(θ_star, inds_star))
-
-optimize(f_rv, g_rv!, θ_holder_to_θ(θ_rv, inds_rv), LBFGS(), OOptions)
-optimize(f_star, g_star!, θ_holder_to_θ(θ_star, inds_star), LBFGS(), OOptions)
+status_plot(θ_tot; plot_epoch=10)
+OOptions = Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5)
 
 println("guess $tracker, std=$(round(std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise), digits=5))")
-for i = 1:6
+for i = 1:4
     tracker += 1
     println("guess $tracker")
 
-    # fit tellurics
-    @time optimize(f_tel, g_tel!, θ_holder_to_θ(θ_holder_tel, inds_tel), LBFGS(),
-        Optim.Options(iterations=30, f_tol=1e-3, g_tol=1e5))
-    M_tel[:,:], s_tel[:,:], μ_tel[:] = θ_holder_tel
-    est_flux_bary!(flux_bary, var_bary, tel_model(θ_holder_tel))
+    optimize(f_star, g_star!, θ_holder_to_θ(θ_star, inds_star), LBFGS(), OOptions)
+    optimize(f_tel, g_tel!, θ_holder_to_θ(θ_tel, inds_tel), LBFGS(), OOptions)
+    optimize(f_rv, g_rv!, θ_holder_to_θ(θ_rv, inds_rv), LBFGS(), OOptions)
 
-    # fit RV
-    _, M_rv[:], s_rv[:], _, rvs_notel[:] = DPCA(flux_bary, λ_star_template;
-        template=μ_star, num_components=1)
-
-    # fit stellar variability
-    @time optimize(f_star, g_star!, θ_holder_to_θ(θ_holder_star, inds_star), LBFGS(),
-        Optim.Options(iterations=30, f_tol=1e-3, g_tol=1e5))
-    M_star_var[:,:], s_star_var[:,:], μ_star[:] = θ_holder_star
-    est_tellurics!(telluric_obs, star_model(M_rv, s_rv, θ_holder_star), var_bary)
-
+    rvs_notel[:] = (s_rv .* light_speed_nu)'
     append!(resid_stds, [std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise)])
-    append!(tel_losses, [tel_loss(telluric_obs, obs_var, θ_holder_tel)])
-    append!(star_losses, [star_loss(M_rv, s_rv, flux_bary, var_bary, θ_holder_star)])
+    append!(losses, [loss(θ_tot)])
 
-    println("tel loss, data  = $(tel_loss_data(telluric_obs, obs_var, θ_holder_tel)), prior = $(tel_prior(θ_holder_tel))")
-    println("star loss, data = $(star_loss_data(M_rv, s_rv, flux_bary, var_bary, θ_holder_star)), prior = $(star_prior(θ_holder_star))")
-    println("rv std          = $(round(std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise), digits=5))")
-    status_plot(θ_holder)
+    println("loss   = $(loss(θ_tot))")
+    println("rv std = $(round(std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise), digits=5))")
+    status_plot(θ_tot)
 end
 plot(resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS", legend=false)
-plot(tel_losses; xlabel="iter", ylabel="tel loss", legend=false)
-plot(star_losses; xlabel="iter", ylabel="star loss", legend=false)
+plot(losses; xlabel="iter", ylabel="loss", legend=false)
 
 ## Extra plots
 
