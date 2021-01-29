@@ -232,6 +232,8 @@ png(predict_plot, "figs/model_1.png")
 
 std((rvs_naive - rvs_kep_nu) - rvs_activ_no_noise)
 std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise)
+std((rvs_naive - rvs_kep_nu) - rvs_activ_noisy)
+std((rvs_notel - rvs_kep_nu) - rvs_activ_noisy)
 std(rvs_activ_noisy - rvs_activ_no_noise)  # best case
 std(rvs_notel - rvs_kep_nu)
 std(rvs_activ_noisy)
@@ -523,28 +525,29 @@ star_model_result = star_model(θ_star)
 
 println("guess $tracker, std=$(round(std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise), digits=5))")
 rvs_notel_opt = copy(rvs_notel)
-for i in 1:9
+@time for i in 1:3
     tracker += 1
     println("guess $tracker")
+
+    optimize(f_star, g_star!, θ_holder_to_θ(θ_star, inds_star), LBFGS(), OOptions)
+    star_model_result[:, :] = star_model(θ_star)
+    M_rv[:, :] = calc_doppler_component_RVSKL(λ_star_template, μ_star)
 
     optimize(f_tel, g_tel!, θ_holder_to_θ(θ_tel, inds_tel), LBFGS(), OOptions)
     tel_model_result[:, :] = tel_model(θ_tel)
 
     optimize(f_rv, g_rv!, θ_holder_to_θ(θ_rv, inds_rv), LBFGS(), OOptions)
     rv_model_result[:, :] = rv_model(μ_star, θ_rv)
-
-    optimize(f_star, g_star!, θ_holder_to_θ(θ_star, inds_star), LBFGS(), OOptions)
-    star_model_result[:, :] = star_model(θ_star)
-    M_rv[:, :] = calc_doppler_component_RVSKL(λ_star_template, μ_star)
-
     rvs_notel_opt[:] = (s_rv .* light_speed_nu)'
+
     append!(resid_stds, [std(rvs_notel_opt - rvs_kep_nu - rvs_activ_no_noise)])
     append!(losses, [loss(θ_tot)])
 
     println("loss   = $(loss(θ_tot))")
     println("rv std = $(round(std((rvs_notel_opt - rvs_kep_nu) - rvs_activ_no_noise), digits=5))")
-    status_plot(θ_tot)
+    status_plot(θ_tot; plot_epoch=plot_epoch)
 end
+
 plot(resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS", legend=false)
 plot(losses; xlabel="iter", ylabel="loss", legend=false)
 
@@ -564,3 +567,35 @@ plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color
 plot!(predict_plot, times_nu .% planet_P_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
 plot!(predict_plot, times_nu .% planet_P_nu, rvs_notel_opt, st=:scatter, ms=3, color=:darkgreen, label="After optimization")
 png(predict_plot, "figs/model_2_phase.png")
+
+# predict_plot = plot_spectrum(; xlim=(627.8,628.3)) # o2
+# predict_plot = plot_spectrum(; xlim = (647, 656))  # h2o
+# predict_plot = plot_spectrum(; xlim=(651.5,652))  # h2o
+predict_plot = plot_spectrum(; title="Stellar model")
+plot!(λ_star_template, μ_star; label="μ")
+plot!(λ_star_template, M_star_var[:,1]; label="basis 1")
+plot!(λ_star_template, M_star_var[:,2]; label="basis 2")
+png(predict_plot, "figs/model_star_basis.png")
+
+plot_scores(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "Weights", dpi = 400, kwargs...)
+predict_plot = plot_scores(; title="Stellar model")
+scatter!(times_nu, s_star_var[1, :]; label="weights 1")
+scatter!(times_nu, s_star_var[2, :]; label="weights 2")
+png(predict_plot, "figs/model_star_weights.png")
+
+scatter(times_nu, s_tel')
+
+
+scatter(times_nu, (rvs_notel_opt - rvs_kep_nu) ./ (std(rvs_notel_opt - rvs_kep_nu)/std(s_star_var[1,:])))
+
+predict_plot = plot_spectrum(; title="Telluric model")
+plot!(obs_λ, μ_tel; label="μ")
+plot!(obs_λ, M_tel[:,1]; label="basis 1")
+plot!(obs_λ, M_tel[:,2]; label="basis 2")
+png(predict_plot, "figs/model_tel_basis.png")
+
+predict_plot = plot_scores(; title="Telluric model")
+scatter!(times_nu, s_tel[1, :]; label="weights 1")
+scatter!(times_nu, s_tel[2, :]; label="weights 2")
+scatter!(times_nu, airmasses .- 3; label="airmasses")
+png(predict_plot, "figs/model_tel_weights.png")
