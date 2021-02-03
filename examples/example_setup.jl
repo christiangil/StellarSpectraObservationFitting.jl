@@ -15,6 +15,8 @@ using FileIO
 
 include("../../src/general_functions.jl")
 include("../../src/PCA_functions.jl")
+include("D:/Christian/Documents/GitHub/GLOM_RV_Example/src/GLOM_RV_Example.jl")
+GLOM_RV = Main.GLOM_RV_Example
 
 make_template(matrix::Matrix{T}) where {T<:Real} = vec(median(matrix, dims=2))
 make_template_mean(matrix::Matrix{T}) where {T<:Real} =
@@ -166,6 +168,7 @@ function initialize(λ_star_template, n_obs, len_obs)
     μ_star = make_template(flux_bary)
     _, M_star, s_star, _, rvs_notel =
         DPCA(flux_bary, λ_star_template; template=μ_star)
+    rvs_naive = copy(rvs_notel)
 
     # telluric model with stellar template
     est_tellurics!(telluric_obs, repeat(μ_star, 1, n_obs), var_bary)
@@ -184,7 +187,7 @@ function initialize(λ_star_template, n_obs, len_obs)
     μ_tel[:] = make_template(telluric_obs)
     _, M_tel[:, :], s_tel[:, :], _ =
         fit_gen_pca(telluric_obs; num_components=2, mu=μ_tel)
-    return telluric_obs, flux_bary, var_bary, μ_star, M_star, s_star, rvs_notel, μ_tel, M_tel, s_tel
+    return telluric_obs, flux_bary, var_bary, μ_star, M_star, s_star, rvs_notel, μ_tel, M_tel, s_tel, rvs_naive
 end
 
 linear_model(θ) = (θ[1] * θ[2]) .+ θ[3]  # M * s + template

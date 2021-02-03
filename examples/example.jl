@@ -2,6 +2,7 @@
 cd(@__DIR__)
 
 @time include("example_setup.jl")
+plot_stuff = true
 
 ## 1) Estimating stellar template
 star_template_res = 2 * sqrt(2) * obs_resolution
@@ -16,7 +17,7 @@ log_λ_star_template = RegularSpacing(log(min_temp_wav), (log(max_temp_wav) - lo
 len_obs = length(obs_λ)
 len_bary = length(log_λ_star_template)
 
-@time telluric_obs, flux_bary, var_bary, μ_star, M_star, s_star, rvs_notel, μ_tel, M_tel, s_tel = initialize(λ_star_template, n_obs, len_obs)
+@time telluric_obs, flux_bary, var_bary, μ_star, M_star, s_star, rvs_notel, μ_tel, M_tel, s_tel, rvs_naive = initialize(λ_star_template, n_obs, len_obs)
 
 flux_obs = ones(len_obs, n_obs)
 obs_var = zeros(len_obs, n_obs)
@@ -27,7 +28,6 @@ end
 
 tel_model_result = ones(size(telluric_obs))
 tel_prior(θ) = model_prior(θ, [2e3, 1e3, 1e4, 1e4, 1e7])
-
 
 function lower_inds_and_ratios(template, λ_function)
     lower_inds = zeros(Int, (len_obs, n_obs))
@@ -53,13 +53,13 @@ spectra_interp(bary_vals, lower_inds, ratios) =
     (bary_vals[lower_inds] .* (1 .- ratios)) + (bary_vals[lower_inds .+ 1] .* (ratios))
 
 star_model_result = ones(size(telluric_obs))
-star_model(θ) = spectra_interp(linear_model(θ))
+star_model(θ) = spectra_interp(linear_model(θ), lower_inds_star, ratios_star)
 # star_prior(θ) = model_prior(θ, [2e-2, 1e-2, 1e2, 1e5, 1e6])
 star_prior(θ) = model_prior(θ, [2e-1, 1e-1, 1e3, 1e6, 1e7])
 
 rv_model_result = ones(size(telluric_obs))
 rv_model(μ_star, θ) = _rv_model(calc_doppler_component_RVSKL(λ_star_template, μ_star), θ)
-_rv_model(M_rv, θ) = spectra_interp(M_rv * θ[1])
+_rv_model(M_rv, θ) = spectra_interp(M_rv * θ[1], lower_inds_star, ratios_star)
 M_rv, s_rv = M_star[:, 1], s_star[1, :]'
 
 loss(tel_model_result, star_model_result, rv_model_result) =
@@ -127,10 +127,12 @@ tel_model_result[:, :] = tel_model(θ_tel)
 rv_model_result = rv_model(μ_star, θ_rv)
 star_model_result = star_model(θ_star)
 
+rvs_kep_nu = ustrip.(rvs_kep)
 resid_stds = [std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise)]
 losses = [loss(tel_model_result, star_model_result, rv_model_result)]
 tracker = 0
 
+plot_epoch = 60
 status_plot(θ_tot; plot_epoch=plot_epoch)
 
 OOptions = Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5)
@@ -176,7 +178,6 @@ if plot_stuff
     png(predict_plot, "figs/model_0_phase.png")
 
     # Compare RV differences to actual RVs from activity
-    rvs_kep_nu = ustrip.(rvs_kep)
     predict_plot = plot_rv()
     plot!(predict_plot, times_nu, rvs_activ_noisy, st=:scatter, ms=3, color=:red, label="Activity (with obs. SNR and resolution)")
     plot!(predict_plot, times_nu, rvs_naive - rvs_kep_nu, st=:scatter, ms=3, color=:blue, label="Before model")
@@ -258,9 +259,11 @@ end
 
 std((rvs_naive - rvs_kep_nu) - rvs_activ_no_noise)
 std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise)
+std((rvs_notel_opt - rvs_kep_nu) - rvs_activ_no_noise)
 std((rvs_naive - rvs_kep_nu) - rvs_activ_noisy)
 std((rvs_notel - rvs_kep_nu) - rvs_activ_noisy)
+std((rvs_notel_opt - rvs_kep_nu) - rvs_activ_noisy)
 std(rvs_activ_noisy - rvs_activ_no_noise)  # best case
-std(rvs_notel - rvs_kep_nu)
+std(rvs_notel_opt - rvs_kep_nu)
 std(rvs_activ_noisy)
 std(rvs_activ_no_noise)
