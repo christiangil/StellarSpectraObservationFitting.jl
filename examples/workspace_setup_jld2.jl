@@ -369,7 +369,7 @@ struct SpectraHolder{T<:AbstractArray{<:Real,1}}
     end
 end
 
-function shift_λ(v::Unitful.Velocity, log_λ::Vector{T}) where {T<:Real}
+function shift_log_λ(v::Unitful.Velocity, log_λ::Vector{T}) where {T<:Real}
     return log_λ .+ (log((1.0 + v / light_speed) / (1.0 - v / light_speed)) / 2)
 end
 
@@ -384,8 +384,8 @@ active[:, :] .-= 1
         (1 - incl_tellurics_int) .+
         (incl_tellurics_int .* tellurics(airmasses[i]))
 
-    log_true_λ = shift_λ(vs[i], log_obs_λ)
-    log_bary_λ = shift_λ(rvs_bary[i], log_obs_λ)
+    log_true_λ = shift_log_λ(vs[i], log_obs_λ)
+    log_bary_λ = shift_log_λ(rvs_bary[i], log_obs_λ)
 
     active_noisy[:, i] = get_mean_GP(gpx, active[:, i], log_obs_λ) .+ 1
     flux_obs =
@@ -410,7 +410,7 @@ x, x, x, x, rvs_activ_noisy = DPCA(active_noisy, obs_λ)
 
 using JLD2
 @save "E:/telfitting/telfitting_workspace.jld2" FWHM HM K SNR SOAP_gp SOAP_gp_ridge Spectra active active_noisy airmasses bary_K bary_ks bary_velocity gp_post gpx gpx_post h2omask incl_tellurics incl_tellurics_int inds inds2 intens_h2o intens_o2 intensities is_h2o is_o2 light_speed light_speed_nu line_center line_max line_min line_peak log_obs_λ log_λ_nu max_intens_h2o_inds max_intens_o2_inds max_wav min_wav n_lines n_mask n_obs normalization nz_inds o2mask obs_resolution obs_λ planet_P_nu planet_ks post_dist pred_y predict_plot quiet quiet_line quiet_λ refit_SOAP_GP rvs_activ_no_noise rvs_activ_noisy rvs_bary rvs_kep solar_sigma star_template_res std_y stellar_activity telluric_sigma times times_nu train_y true_tels true_tels_mean valid_inds valid_obs vs wavelengths wavelengths_h2o wavelengths_o2 x ys θ1 λ λ_nu
-
+@save "E:/telfitting/telfitting_workspace_smol.jld2" SOAP_gp SOAP_gp_ridge Spectra airmasses bary_K inds light_speed light_speed_nu max_wav min_wav n_obs obs_resolution obs_λ planet_P_nu planet_ks quiet rvs_activ_no_noise rvs_activ_noisy rvs_kep times times_nu true_tels true_tels_mean vs wavelengths θ1 λ λ_nu
 # SOAP_gp_slow = build_gp_base(θ1)
 
 # SOAP_gp_slow_bary_temp = SOAP_gp_slow(log_λ_star_template)
