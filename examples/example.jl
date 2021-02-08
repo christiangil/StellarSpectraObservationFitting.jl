@@ -1,42 +1,97 @@
 ## Setup
-cd(@__DIR__)
+using Pkg
+Pkg.activate("examples")
+# Pkg.add("JLD2")
+# Pkg.add("UnitfulAstro")
+# Pkg.add("Unitful")
+# Pkg.add(;path="C:/Users/Christian/Dropbox/GP_research/julia/telfitting")
+# Pkg.add("Stheno")
+# Pkg.add("TemporalGPs")
+# Pkg.add("Distributions")
+# Pkg.add("Plots")
+Pkg.instantiate()
 
-@time include("example_setup.jl")
+using Plots
+include("C:/Users/Christian/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
+tf = Main.telfitting
+
+## Loading (pregenerated) data
+using JLD2
+using Stheno
+using TemporalGPs
+using UnitfulAstro, Unitful
+
+struct SpectraHolder{T<:AbstractArray{<:Real,1}}
+    log_λ_obs::T
+    log_λ_bary::T
+    flux_obs::T
+    var_obs::T
+    function SpectraHolder(
+        log_λ_obs::T,
+        log_λ_bary::T,
+        flux_obs::T,
+        var_obs::T,
+    ) where {T<:AbstractArray{<:Real,1}}
+        @assert 1 <=
+                length(log_λ_obs) ==
+                length(log_λ_bary) ==
+                length(flux_obs) ==
+                length(var_obs)
+        new{typeof(log_λ_obs)}(log_λ_obs, log_λ_bary, flux_obs, var_obs)
+    end
+end
+
+@load "E:/telfitting/telfitting_workspace_smol.jld2" Spectra airmasses obs_resolution obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep
+
+## Setting up necessary variables and functions
+
+light_speed_nu = 299792458
 plot_stuff = true
+include("model_init_funcs.jl")
 
-## 1) Estimating stellar template
-star_template_res = 2 * sqrt(2) * obs_resolution
-
-max_bary_z = 2.5 * bary_K / light_speed
-min_temp_wav = (1 - max_bary_z) * min_wav
-max_temp_wav = (1 + max_bary_z) * max_wav
-n_star_template = Int(round((max_temp_wav - min_temp_wav) * star_template_res / sqrt(max_temp_wav * min_temp_wav)))
-log_λ_star_template = RegularSpacing(log(min_temp_wav), (log(max_temp_wav) - log(min_temp_wav)) / n_star_template, n_star_template)
-λ_star_template =  exp.(log_λ_star_template)
-
-len_obs = length(obs_λ)
-len_bary = length(log_λ_star_template)
-
-@time telluric_obs, flux_bary, var_bary, μ_star, M_star, s_star, rvs_notel, μ_tel, M_tel, s_tel, rvs_naive = initialize(λ_star_template, n_obs, len_obs)
-
+n_obs = length(Spectra)
+len_obs = length(Spectra[1].log_λ_obs)
 flux_obs = ones(len_obs, n_obs)
-obs_var = zeros(len_obs, n_obs)
+var_obs = zeros(len_obs, n_obs)
+log_λ_obs = zeros(len_obs, n_obs)
+log_λ_bary = zeros(len_obs, n_obs)
 for i in 1:n_obs # 13s
     flux_obs[:, i] = Spectra[i].flux_obs
-    obs_var[:, i] = Spectra[i].var_obs
+    var_obs[:, i] = Spectra[i].var_obs
+    log_λ_obs[:, i] = Spectra[i].log_λ_obs
+    log_λ_bary[:, i] = Spectra[i].log_λ_bary
 end
+
+## Initializing models
+
+star_template_res = 2 * sqrt(2) * obs_resolution
+tel_template_res = star_template_res
+
+function create_λ_template(log_λ, resolution)
+    log_min_wav, log_max_wav = [minimum(log_λ), maximum(log_λ)]
+    len = Int(ceil((exp(log_max_wav) - exp(log_min_wav)) * resolution / exp((log_max_wav + log_min_wav)/2)))
+    log_Δλ = (log(log_max_wav) - log(log_min_wav)) / len
+    len += 2
+    log_λ_template = RegularSpacing(log_min_wav - log_Δλ, log_Δλ, len)
+    λ_template = exp.(log_λ_template)
+    return len, log_λ_template, λ_template
+end
+len_bary, log_λ_star_template, λ_star_template = create_λ_template(log_λ_bary, star_template_res)
+len_tel, log_λ_tel_template, λ_tel_template = create_λ_template(log_λ_obs, tel_template_res)
+
+@time telluric_obs, flux_bary, var_bary, μ_star, M_star, s_star, rvs_notel, μ_tel, M_tel, s_tel, rvs_naive = initialize(λ_star_template, n_obs, len_obs)
 
 tel_model_result = ones(size(telluric_obs))
 tel_prior(θ) = model_prior(θ, [2e3, 1e3, 1e4, 1e4, 1e7])
 
-function lower_inds_and_ratios(template, λ_function)
+function lower_inds_and_ratios(template, λ_function, len_obs, n_obs)
     lower_inds = zeros(Int, (len_obs, n_obs))
     ratios = zeros((len_obs, n_obs))
     len_template = length(template)
     for j in 1:n_obs
         current_λ = λ_function(j)
         lower_inds[:, j] = searchsortednearest(template, current_λ; lower=true)
-        for i in 1:size(telluric_obs, 1)
+        for i in 1:len_obs
             x0 = template[lower_inds[i, j]]
             x1 = template[lower_inds[i, j]+1]
             x = current_λ[i]
@@ -46,7 +101,9 @@ function lower_inds_and_ratios(template, λ_function)
     end
     return lower_inds, ratios
 end
+
 lower_inds_star, ratios_star = lower_inds_and_ratios(log_λ_star_template, x -> Spectra[x].log_λ_bary)
+lower_inds_tel, ratios_tel = lower_inds_and_ratios(log.(obs_λ), x -> Spectra[x].log_λ_obs)
 
 
 spectra_interp(bary_vals, lower_inds, ratios) =
@@ -63,7 +120,7 @@ _rv_model(M_rv, θ) = spectra_interp(M_rv * θ[1], lower_inds_star, ratios_star)
 M_rv, s_rv = M_star[:, 1], s_star[1, :]'
 
 loss(tel_model_result, star_model_result, rv_model_result) =
-    sum((((tel_model_result .* (star_model_result + rv_model_result)) - flux_obs) .^ 2) ./ obs_var)
+    sum((((tel_model_result .* (star_model_result + rv_model_result)) - flux_obs) .^ 2) ./ var_obs)
 loss_tel(θ) = loss(tel_model(θ), star_model_result, rv_model_result) +
     tel_prior(θ)
 loss_star(θ) = loss(tel_model_result, star_model(θ), rv_model_result) +
@@ -127,11 +184,29 @@ tel_model_result[:, :] = tel_model(θ_tel)
 rv_model_result = rv_model(μ_star, θ_rv)
 star_model_result = star_model(θ_star)
 
-rvs_kep_nu = ustrip.(rvs_kep)
 resid_stds = [std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise)]
 losses = [loss(tel_model_result, star_model_result, rv_model_result)]
 tracker = 0
 
+function status_plot(θ_tot; plot_epoch=1)
+    tel_model_result = tel_model(view(θ_tot, 1:3))
+    star_model_result = star_model(view(θ_tot, 4:6))
+    rv_model_result = _rv_model(M_rv, view(θ_tot, 7))
+
+    l = @layout [a; b]
+    # predict_plot = plot_spectrum(; legend = :bottomleft, size=(800,1200), layout = l)
+    # predict_plot = plot_spectrum(; xlim=(627.8,628.3), legend=:bottomleft, size=(800,1200), layout = l) # o2
+    # predict_plot = plot_spectrum(; xlim=(651.5,652), legend=:bottomleft, size=(800,1200), layout = l)  # h2o
+    predict_plot = plot_spectrum(; xlim = (647, 656), legend = :bottomleft, size=(800,1200), layout = l)  # h2o
+    plot!(predict_plot[1], obs_λ, true_tels[:, plot_epoch], label="true tel")
+    plot!(predict_plot[1], obs_λ, flux_obs[:, plot_epoch] ./ (star_model_result[:, plot_epoch] + rv_model_result[:, plot_epoch]), label="predicted tel", alpha = 0.5)
+    plot!(predict_plot[1], obs_λ, tel_model_result[:, plot_epoch], label="model tel: $tracker", alpha = 0.5)
+    plot_bary_λs = exp.(Spectra[plot_epoch].log_λ_bary)
+    plot!(predict_plot[2], plot_bary_λs, flux_obs[:, plot_epoch] ./ true_tels[:, plot_epoch], label="true star", )
+    plot!(predict_plot[2], plot_bary_λs, flux_obs[:, plot_epoch] ./ tel_model_result[:, plot_epoch], label="predicted star", alpha = 0.5)
+    plot!(predict_plot[2], plot_bary_λs, star_model_result[:, plot_epoch] + rv_model_result[:, plot_epoch], label="model star: $tracker", alpha = 0.5)
+    display(predict_plot)
+end
 plot_epoch = 60
 status_plot(θ_tot; plot_epoch=plot_epoch)
 
@@ -170,8 +245,6 @@ plot(losses; xlabel="iter", ylabel="loss", legend=false)
 if plot_stuff
 
     # Compare first guess at RVs to true signal
-    plot_times = linspace(times_nu[1], times_nu[end], 1000)
-    plot_rvs_kep = ustrip.(planet_ks.(plot_times .* 1u"d"))
     predict_plot = plot_rv()
     plot!(predict_plot, plot_times .% planet_P_nu, plot_rvs_kep, st=:line, color=:red, lw=1, label="Injected Keplerian")
     plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")

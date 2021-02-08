@@ -4,3 +4,4 @@ figs
 good_run
 lines
 old
+examples/generate_example_data.jl

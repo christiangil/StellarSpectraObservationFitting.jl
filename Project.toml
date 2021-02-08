@@ -2,3 +2,7 @@ name = "telfitting"
 uuid = "6b1189bd-9150-44f8-8055-f6ca7d16451e"
 authors = ["Chistian Gilbertson <chistianjgilbertson@gmail.com>"]
 version = "0.1.0"
+
+[deps]
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
+UnitfulAstro = "6112ee07-acf9-5e0f-b108-d242c714bf9f"
