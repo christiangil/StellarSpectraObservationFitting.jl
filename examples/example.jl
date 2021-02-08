@@ -67,17 +67,43 @@ end
 star_template_res = 2 * sqrt(2) * obs_resolution
 tel_template_res = star_template_res
 
-function create_λ_template(log_λ, resolution)
-    log_min_wav, log_max_wav = [minimum(log_λ), maximum(log_λ)]
-    len = Int(ceil((exp(log_max_wav) - exp(log_min_wav)) * resolution / exp((log_max_wav + log_min_wav)/2)))
-    log_Δλ = (log(log_max_wav) - log(log_min_wav)) / len
-    len += 2
-    log_λ_template = RegularSpacing(log_min_wav - log_Δλ, log_Δλ, len)
-    λ_template = exp.(log_λ_template)
-    return len, log_λ_template, λ_template
+len_bary, log_λ_star_template, λ_star_template = tf.create_λ_template(log_λ_bary, star_template_res)
+len_tel, log_λ_tel_template, λ_tel_template = tf.create_λ_template(log_λ_obs, tel_template_res)
+
+
+flux_tel = ones(len_tel, n_obs)
+flux_bary = ones(len_bary, n_obs)  # interpolation / telluric_obs
+
+
+lower_inds_star, ratios_star = tf.lower_inds_and_ratios(log_λ_star_template, log_λ_bary)
+lower_inds_tel, ratios_tel = tf.lower_inds_and_ratios(log_λ_tel_template, log_λ_obs)
+
+
+spectra_interp(bary_vals, lower_inds, ratios) =
+    (bary_vals[lower_inds] .* (1 .- ratios)) + (bary_vals[lower_inds .+ 1] .* (ratios))
+
+
+function est_flux_tel!(tellurics::Matrix{T}, stars::Matrix{T},
+    vars::Matrix{T}, log_λ_star_template::Vector{T}, Spectra) where {T<:Real}
+    for i in 1:n_obs # 13s
+        tellurics[:, i] = Spectra[i].flux_obs ./ (get_mean_GP(
+            SOAP_gp(log_λ_star_template, vars[:, i]),
+            stars[:, i] .- 1,
+            Spectra[i].log_λ_bary) .+ 1)
+    end
 end
-len_bary, log_λ_star_template, λ_star_template = create_λ_template(log_λ_bary, star_template_res)
-len_tel, log_λ_tel_template, λ_tel_template = create_λ_template(log_λ_obs, tel_template_res)
+
+
+
+
+
+
+
+
+
+
+
+
 
 @time telluric_obs, flux_bary, var_bary, μ_star, M_star, s_star, rvs_notel, μ_tel, M_tel, s_tel, rvs_naive = initialize(λ_star_template, n_obs, len_obs)
 
