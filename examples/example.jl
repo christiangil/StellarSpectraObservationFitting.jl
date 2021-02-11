@@ -16,134 +16,68 @@ include("C:/Users/Christian/Dropbox/GP_research/julia/telfitting/src/telfitting.
 tf = Main.telfitting
 
 ## Loading (pregenerated) data
-using JLD2
-using Stheno
-using TemporalGPs
-using UnitfulAstro, Unitful
 
-struct SpectraHolder{T<:AbstractArray{<:Real,1}}
-    log_λ_obs::T
-    log_λ_bary::T
-    flux_obs::T
-    var_obs::T
-    function SpectraHolder(
-        log_λ_obs::T,
-        log_λ_bary::T,
-        flux_obs::T,
-        var_obs::T,
-    ) where {T<:AbstractArray{<:Real,1}}
-        @assert 1 <=
-                length(log_λ_obs) ==
-                length(log_λ_bary) ==
-                length(flux_obs) ==
-                length(var_obs)
-        new{typeof(log_λ_obs)}(log_λ_obs, log_λ_bary, flux_obs, var_obs)
-    end
-end
-
+include("data_structs.jl")
 @load "E:/telfitting/telfitting_workspace_smol.jld2" Spectra airmasses obs_resolution obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep
+# @load "E:/telfitting/telfitting_workspace.jld2" quiet λ_nu
 
 ## Setting up necessary variables and functions
 
 light_speed_nu = 299792458
 plot_stuff = true
-include("model_init_funcs.jl")
 
 n_obs = length(Spectra)
 len_obs = length(Spectra[1].log_λ_obs)
 flux_obs = ones(len_obs, n_obs)
 var_obs = zeros(len_obs, n_obs)
 log_λ_obs = zeros(len_obs, n_obs)
-log_λ_bary = zeros(len_obs, n_obs)
+log_λ_star = zeros(len_obs, n_obs)
 for i in 1:n_obs # 13s
     flux_obs[:, i] = Spectra[i].flux_obs
     var_obs[:, i] = Spectra[i].var_obs
     log_λ_obs[:, i] = Spectra[i].log_λ_obs
-    log_λ_bary[:, i] = Spectra[i].log_λ_bary
+    log_λ_star[:, i] = Spectra[i].log_λ_bary
 end
 
 ## Initializing models
 
-star_template_res = 2 * sqrt(2) * obs_resolution
-tel_template_res = star_template_res
+star_model_res = 2 * sqrt(2) * obs_resolution
+tel_model_res = obs_resolution
 
-len_bary, log_λ_star_template, λ_star_template = tf.create_λ_template(log_λ_bary, star_template_res)
-len_tel, log_λ_tel_template, λ_tel_template = tf.create_λ_template(log_λ_obs, tel_template_res)
+@time tf_model = tf.TF_Model(log_λ_obs, log_λ_star, star_model_res, tel_model_res)
 
+@time rvs_notel, rvs_naive = tf.initialize!(tf_model, flux_obs)
 
-flux_tel = ones(len_tel, n_obs)
-flux_bary = ones(len_bary, n_obs)  # interpolation / telluric_obs
-
-
-lower_inds_star, ratios_star = tf.lower_inds_and_ratios(log_λ_star_template, log_λ_bary)
-lower_inds_tel, ratios_tel = tf.lower_inds_and_ratios(log_λ_tel_template, log_λ_obs)
+plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (nm)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
+plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
 
 
-spectra_interp(bary_vals, lower_inds, ratios) =
-    (bary_vals[lower_inds] .* (1 .- ratios)) + (bary_vals[lower_inds .+ 1] .* (ratios))
-
-
-function est_flux_tel!(tellurics::Matrix{T}, stars::Matrix{T},
-    vars::Matrix{T}, log_λ_star_template::Vector{T}, Spectra) where {T<:Real}
-    for i in 1:n_obs # 13s
-        tellurics[:, i] = Spectra[i].flux_obs ./ (get_mean_GP(
-            SOAP_gp(log_λ_star_template, vars[:, i]),
-            stars[:, i] .- 1,
-            Spectra[i].log_λ_bary) .+ 1)
-    end
-end
+loss(tel_model_result, star_model_result, rv_model_result) =
+    sum((((tel_model_result .* (star_model_result + rv_model_result)) - flux_obs) .^ 2) ./ var_obs)
+loss_tel(θ) = loss(tel_model(θ), star_model_result, rv_model_result) +
+    tel_prior(θ)
+loss_star(θ) = loss(tel_model_result, star_model(θ), rv_model_result) +
+    star_prior(θ)
+loss_rv(θ) = loss(tel_model_result, star_model_result, _rv_model(M_rv, θ))
 
 
 
 
+# plt = plot_spectrum(; xlim=(620,670))
+# plot!(plt, tf_model.star.λ, tf_model.star.μ; label="μ")
+# plot!(plt, λ_nu, quiet; label="SOAP")
 
+M_rv, s_rv = M_star[:, 1], s_star[1, :]'
+M_star_var, s_star_var = M_star[:, 2:3], s_star[2:3, :]
 
-
-
-
-
-
-
-
-@time telluric_obs, flux_bary, var_bary, μ_star, M_star, s_star, rvs_notel, μ_tel, M_tel, s_tel, rvs_naive = initialize(λ_star_template, n_obs, len_obs)
-
-tel_model_result = ones(size(telluric_obs))
-tel_prior(θ) = model_prior(θ, [2e3, 1e3, 1e4, 1e4, 1e7])
-
-function lower_inds_and_ratios(template, λ_function, len_obs, n_obs)
-    lower_inds = zeros(Int, (len_obs, n_obs))
-    ratios = zeros((len_obs, n_obs))
-    len_template = length(template)
-    for j in 1:n_obs
-        current_λ = λ_function(j)
-        lower_inds[:, j] = searchsortednearest(template, current_λ; lower=true)
-        for i in 1:len_obs
-            x0 = template[lower_inds[i, j]]
-            x1 = template[lower_inds[i, j]+1]
-            x = current_λ[i]
-            ratios[i, j] = (x - x0) / (x1 - x0)
-        end
-        lower_inds[:, j] .+= (j - 1) * len_template
-    end
-    return lower_inds, ratios
-end
-
-lower_inds_star, ratios_star = lower_inds_and_ratios(log_λ_star_template, x -> Spectra[x].log_λ_bary)
-lower_inds_tel, ratios_tel = lower_inds_and_ratios(log.(obs_λ), x -> Spectra[x].log_λ_obs)
-
-
-spectra_interp(bary_vals, lower_inds, ratios) =
-    (bary_vals[lower_inds] .* (1 .- ratios)) + (bary_vals[lower_inds .+ 1] .* (ratios))
-
-star_model_result = ones(size(telluric_obs))
+tel_prior(θ) = model_prior(θ, [2, 1e3, 1e4, 1e4, 1e7])
 star_model(θ) = spectra_interp(linear_model(θ), lower_inds_star, ratios_star)
-# star_prior(θ) = model_prior(θ, [2e-2, 1e-2, 1e2, 1e5, 1e6])
-star_prior(θ) = model_prior(θ, [2e-1, 1e-1, 1e3, 1e6, 1e7])
+star_prior(θ) = model_prior(θ, [2, 1e-1, 1e3, 1e6, 1e7])
 
 rv_model_result = ones(size(telluric_obs))
 rv_model(μ_star, θ) = _rv_model(calc_doppler_component_RVSKL(λ_star_template, μ_star), θ)
 _rv_model(M_rv, θ) = spectra_interp(M_rv * θ[1], lower_inds_star, ratios_star)
-M_rv, s_rv = M_star[:, 1], s_star[1, :]'
+
 
 loss(tel_model_result, star_model_result, rv_model_result) =
     sum((((tel_model_result .* (star_model_result + rv_model_result)) - flux_obs) .^ 2) ./ var_obs)
@@ -166,8 +100,7 @@ function θ_holder_to_θ(θ_holder, inds)
     return θ
 end
 
-M_rv, s_rv = M_star[:, 1], s_star[1, :]'
-M_star_var, s_star_var = M_star[:, 2:3], s_star[2:3, :]
+
 
 s_star_var ./= 5
 
@@ -227,10 +160,10 @@ function status_plot(θ_tot; plot_epoch=1)
     plot!(predict_plot[1], obs_λ, true_tels[:, plot_epoch], label="true tel")
     plot!(predict_plot[1], obs_λ, flux_obs[:, plot_epoch] ./ (star_model_result[:, plot_epoch] + rv_model_result[:, plot_epoch]), label="predicted tel", alpha = 0.5)
     plot!(predict_plot[1], obs_λ, tel_model_result[:, plot_epoch], label="model tel: $tracker", alpha = 0.5)
-    plot_bary_λs = exp.(Spectra[plot_epoch].log_λ_bary)
-    plot!(predict_plot[2], plot_bary_λs, flux_obs[:, plot_epoch] ./ true_tels[:, plot_epoch], label="true star", )
-    plot!(predict_plot[2], plot_bary_λs, flux_obs[:, plot_epoch] ./ tel_model_result[:, plot_epoch], label="predicted star", alpha = 0.5)
-    plot!(predict_plot[2], plot_bary_λs, star_model_result[:, plot_epoch] + rv_model_result[:, plot_epoch], label="model star: $tracker", alpha = 0.5)
+    plot_star_λs = exp.(Spectra[plot_epoch].log_λ_star)
+    plot!(predict_plot[2], plot_star_λs, flux_obs[:, plot_epoch] ./ true_tels[:, plot_epoch], label="true star", )
+    plot!(predict_plot[2], plot_star_λs, flux_obs[:, plot_epoch] ./ tel_model_result[:, plot_epoch], label="predicted star", alpha = 0.5)
+    plot!(predict_plot[2], plot_star_λs, star_model_result[:, plot_epoch] + rv_model_result[:, plot_epoch], label="model star: $tracker", alpha = 0.5)
     display(predict_plot)
 end
 plot_epoch = 60

@@ -1,5 +1,5 @@
 # functions related to calculating the PCA scores of time series spectra
-
+using LinearAlgebra
 """
 modified code shamelessly stolen from RvSpectraKitLearn.jl/src/deriv_spectra_simple.jl
 Estimate the derivatives of a vector
