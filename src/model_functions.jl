@@ -147,9 +147,9 @@ end
 spectra_interp(og_vals::Matrix, lih) =
     (og_vals[lih.li] .* (1 .- lih.ratios)) + (og_vals[lih.li .+ 1] .* (lih.ratios))
 
-tel_model(tfm::TFModel) = spectra_interp(tfm.tel.lm(), tfm.lih_t2o)
-star_model(tfm::TFModel) = spectra_interp(tfm.star.lm(), tfm.lih_b2o)
-rv_model(tfm::TFModel) = spectra_interp(tfm.rv.lm(), tfm.lih_b2o)
+tel_model(tfm) = spectra_interp(tfm.tel.lm(), tfm.lih_t2o)
+star_model(tfm) = spectra_interp(tfm.star.lm(), tfm.lih_b2o)
+rv_model(tfm) = spectra_interp(tfm.rv.lm(), tfm.lih_b2o)
 
 function initialize!(tfm, flux_obs::Matrix)
 

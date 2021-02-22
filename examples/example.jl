@@ -51,6 +51,7 @@ tel_model_res = obs_resolution
 plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (nm)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
 plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
 
+
 # plt = plot_rv()
 # scatter!(plt, times_nu, rvs_naive)
 # scatter!(plt, times_nu, rvs_notel)
@@ -65,54 +66,29 @@ _loss(tel, star, rv, flux_obs, var_obs) =
 loss_ts(rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), rv, flux_obs, var_obs) + tel_prior() + star_prior()
 loss_rv(tel, star, flux_obs, var_obs) = _loss(tel, star, tf.rv_model(tf_model), flux_obs, var_obs)
 
-using Flux, Zygote
+using Flux, Zygote, Optim
+# m      = Chain(Dense(1,3,tanh) , Dense(3,1))
+# x      = LinRange(-pi,pi,100)'
+# y      = sin.(x)
+# loss() = mean(abs2, m(x) .- y)
+# Zygote.refresh()
+# pars   = Flux.params(m)
+# lossfun, gradfun, fg!, p0 = tf.optfuns(loss, pars)
+# OOptions = Optim.Options(iterations=1000)
+# res = Optim.optimize(Optim.only_fg!(fg!), p0, OOptions)
+#
+#
+# plot(m(x)')
 
+
+OOptions = Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5)
+
+θ_ts = params(tf_model.star.lm.M, tf_model.star.lm.s, tf_model.star.lm.μ, tf_model.tel.lm.M, tf_model.tel.lm.s, tf_model.tel.lm.μ)
 θ_rv = params(tf_model.rv.lm.s)
-opt_rv = ADAM(1e-4)
-
-function train!(f::Function, θ::Zygote.Params, opt; max_iter::Int=10)
-    i = 1
-    losses = [Inf, f()]
-    while i < max_iter && abs(losses[2]-losses[1]) > 1
-        gs = gradient(f, θ)
-        Flux.update!(opt_rv, θ, gs)
-        i += 1
-        losses[:] = [losses[2], f()]
-        println("loss: ", losses[2])
-    end
-end
-
 
 tf_model.rv.lm.M[:] = tf.calc_doppler_component_RVSKL(tf_model.star.λ, tf_model.star.lm.μ)
-
-
-using Flux, Zygote, Optim, FluxOptTools, Statistics
-m      = Chain(Dense(1,3,tanh) , Dense(3,1))
-x      = LinRange(-pi,pi,100)'
-y      = sin.(x)
-loss() = mean(abs2, m(x) .- y)
-Zygote.refresh()
-pars   = Flux.params(m)
-lossfun, gradfun, fg!, p0 = optfuns(loss, pars)
-res = Optim.optimize(Optim.only_fg!(fg!), p0, Optim.Options(iterations=1000, store_trace=true))
-
-
-train!(() -> loss_rv(tf.tel_model(tf_model), tf.star_model(tf_model), flux_obs, var_obs), θ_rv, opt_rv)
-
-function θ_holder!(θ_holder, θ, inds)
-    for i in 1:length(inds)
-        θ_holder[i][:,:] = reshape(θ[inds[i]], size(θ_holder[i]))
-    end
-end
-function θ_holder_to_θ(θ_holder, inds)
-    θ = zeros(sum([length(i) for i in θ_holder]))
-    for i in 1:length(θ_holder)
-        θ[inds[i]] = collect(Iterators.flatten(θ_holder[i][:,:]))
-    end
-    return θ
-end
-
-
+lossfun, gradfun, fg!, p0 = tf.optfuns(() -> loss_rv(tf.tel_model(tf_model), tf.star_model(tf_model), flux_obs, var_obs), θ_rv)
+res = Optim.optimize(Optim.only_fg!(fg!), p0, OOptions)
 
 s_star_var ./= 5
 
@@ -120,36 +96,6 @@ s_star_var ./= 5
 θ_tel = [M_tel, s_tel, μ_tel]
 θ_star = [M_star_var, s_star_var, μ_star]
 θ_rv = [s_rv]
-
-function relevant_inds(θ_hold)
-    inds = [1:length(θ_hold[1])]
-    for i in 2:length(θ_hold)
-        append!(inds, [(inds[i-1][end]+1):(inds[i-1][end]+length(θ_hold[i]))])
-    end
-    return inds
-end
-inds_tel = relevant_inds(θ_tel)
-inds_star = relevant_inds(θ_star)
-inds_rv = relevant_inds(θ_rv)
-
-function f(θ, θ_holder, inds, loss_func; kwargs...)
-    θ_holder!(θ_holder, θ, inds; kwargs...)
-    return loss_func(θ_holder)
-end
-f_tel(θ) = f(θ, θ_tel, inds_tel, loss_tel)
-f_star(θ) = f(θ, θ_star, inds_star, loss_star)
-f_rv(θ) = f(θ, θ_rv, inds_rv, loss_rv)
-
-function g!(G, θ, θ_holder, inds, loss_func)
-    θ_holder!(θ_holder, θ, inds)
-    grads = gradient((θ_hold) -> loss_func(θ_hold), θ_holder)[1]
-    for i in 1:length(inds)
-        G[inds[i]] = collect(Iterators.flatten(grads[i]))
-    end
-end
-g_tel!(G, θ) = g!(G, θ, θ_tel, inds_tel, loss_tel)
-g_star!(G, θ) = g!(G, θ, θ_star, inds_star, loss_star)
-g_rv!(G, θ) = g!(G, θ, θ_rv, inds_rv, loss_rv)
 
 tel_model_result[:, :] = tel_model(θ_tel)
 rv_model_result = rv_model(μ_star, θ_rv)
