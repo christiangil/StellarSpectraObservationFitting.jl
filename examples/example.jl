@@ -44,48 +44,60 @@ end
 star_model_res = 2 * sqrt(2) * obs_resolution
 tel_model_res = obs_resolution
 
-@time tf_model = tf.TF_Model(log_λ_obs, log_λ_star, star_model_res, tel_model_res)
+@time tf_model = tf.TFModel(log_λ_obs, log_λ_star, star_model_res, tel_model_res)
 
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, flux_obs)
 
 plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (nm)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
 plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
 
-
-loss(tel_model_result, star_model_result, rv_model_result) =
-    sum((((tel_model_result .* (star_model_result + rv_model_result)) - flux_obs) .^ 2) ./ var_obs)
-loss_tel(θ) = loss(tel_model(θ), star_model_result, rv_model_result) +
-    tel_prior(θ)
-loss_star(θ) = loss(tel_model_result, star_model(θ), rv_model_result) +
-    star_prior(θ)
-loss_rv(θ) = loss(tel_model_result, star_model_result, _rv_model(M_rv, θ))
+# plt = plot_rv()
+# scatter!(plt, times_nu, rvs_naive)
+# scatter!(plt, times_nu, rvs_notel)
+# scatter!(plt, times_nu, rvs_activ_no_noise + rvs_kep_nu)
 
 
+tel_prior() = tf.model_prior(tf_model.tel.lm, [2, 1e3, 1e4, 1e4, 1e7])
+star_prior() = tf.model_prior(tf_model.star.lm, [2, 1e-1, 1e3, 1e6, 1e7])
+
+_loss(tel, star, rv, flux_obs, var_obs) =
+    sum((((tel .* (star + rv)) - flux_obs) .^ 2) ./ var_obs)
+loss_ts(rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), rv, flux_obs, var_obs) + tel_prior() + star_prior()
+loss_rv(tel, star, flux_obs, var_obs) = _loss(tel, star, tf.rv_model(tf_model), flux_obs, var_obs)
+
+using Flux, Zygote
+
+θ_rv = params(tf_model.rv.lm.s)
+opt_rv = ADAM(1e-4)
+
+function train!(f::Function, θ::Zygote.Params, opt; max_iter::Int=10)
+    i = 1
+    losses = [Inf, f()]
+    while i < max_iter && abs(losses[2]-losses[1]) > 1
+        gs = gradient(f, θ)
+        Flux.update!(opt_rv, θ, gs)
+        i += 1
+        losses[:] = [losses[2], f()]
+        println("loss: ", losses[2])
+    end
+end
 
 
-# plt = plot_spectrum(; xlim=(620,670))
-# plot!(plt, tf_model.star.λ, tf_model.star.μ; label="μ")
-# plot!(plt, λ_nu, quiet; label="SOAP")
-
-M_rv, s_rv = M_star[:, 1], s_star[1, :]'
-M_star_var, s_star_var = M_star[:, 2:3], s_star[2:3, :]
-
-tel_prior(θ) = model_prior(θ, [2, 1e3, 1e4, 1e4, 1e7])
-star_model(θ) = spectra_interp(linear_model(θ), lower_inds_star, ratios_star)
-star_prior(θ) = model_prior(θ, [2, 1e-1, 1e3, 1e6, 1e7])
-
-rv_model_result = ones(size(telluric_obs))
-rv_model(μ_star, θ) = _rv_model(calc_doppler_component_RVSKL(λ_star_template, μ_star), θ)
-_rv_model(M_rv, θ) = spectra_interp(M_rv * θ[1], lower_inds_star, ratios_star)
+tf_model.rv.lm.M[:] = tf.calc_doppler_component_RVSKL(tf_model.star.λ, tf_model.star.lm.μ)
 
 
-loss(tel_model_result, star_model_result, rv_model_result) =
-    sum((((tel_model_result .* (star_model_result + rv_model_result)) - flux_obs) .^ 2) ./ var_obs)
-loss_tel(θ) = loss(tel_model(θ), star_model_result, rv_model_result) +
-    tel_prior(θ)
-loss_star(θ) = loss(tel_model_result, star_model(θ), rv_model_result) +
-    star_prior(θ)
-loss_rv(θ) = loss(tel_model_result, star_model_result, _rv_model(M_rv, θ))
+using Flux, Zygote, Optim, FluxOptTools, Statistics
+m      = Chain(Dense(1,3,tanh) , Dense(3,1))
+x      = LinRange(-pi,pi,100)'
+y      = sin.(x)
+loss() = mean(abs2, m(x) .- y)
+Zygote.refresh()
+pars   = Flux.params(m)
+lossfun, gradfun, fg!, p0 = optfuns(loss, pars)
+res = Optim.optimize(Optim.only_fg!(fg!), p0, Optim.Options(iterations=1000, store_trace=true))
+
+
+train!(() -> loss_rv(tf.tel_model(tf_model), tf.star_model(tf_model), flux_obs, var_obs), θ_rv, opt_rv)
 
 function θ_holder!(θ_holder, θ, inds)
     for i in 1:length(inds)
