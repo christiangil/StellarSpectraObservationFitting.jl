@@ -81,9 +81,10 @@ struct BaseLinearModel{T<:Number} <: LinearModel
 		return new{T}(M, s)
 	end
 end
-_eval_lm(lm::LinearModel) = lm.M * lm.s
-(lm::BaseLinearModel)() = _eval_lm(lm)
-(lm::FullLinearModel)() = _eval_lm(lm) .+ lm.μ
+_eval_lm(M, s) = M * s
+_eval_full_lm(M, s, μ) = _eval_lm(M, s) .+ μ
+(lm::BaseLinearModel)() = _eval_lm(lm.M, lm.s)
+(lm::FullLinearModel)() = _eval_full_lm(lm.M, lm.s, lm.μ)
 
 struct TFSubmodel{T<:Number}
     len::Int
@@ -151,14 +152,33 @@ tel_model(tfm) = spectra_interp(tfm.tel.lm(), tfm.lih_t2o)
 star_model(tfm) = spectra_interp(tfm.star.lm(), tfm.lih_b2o)
 rv_model(tfm) = spectra_interp(tfm.rv.lm(), tfm.lih_b2o)
 
-function initialize!(tfm, flux_obs::Matrix)
+
+function fix_FullLinearModel_s!(flm::FullLinearModel, min::Number, max::Number)
+	@assert all(min .< flm.μ .< max)
+	result = ones(typeof(flm.μ[1]), length(flm.μ))
+	for i in 1:size(flm.s, 2)
+		result[:] = _eval_full_lm(flm.M, flm.s[:, i], flm.μ)
+		while any(result .> max) || any(result .< min)
+			# println("$i, old s: $(lm.s[:, i]), min: $(minimum(result)), max:  $(maximum(result))")
+			flm.s[:, i] ./= 2
+			result[:] = _eval_full_lm(flm.M, flm.s[:, i], flm.μ)
+			# println("$i, new s: $(lm.s[:, i]), min: $(minimum(result)), max:  $(maximum(result))")
+		end
+	end
+end
+
+
+function initialize!(tfm, flux_obs::Matrix; min::Number=0.05, max::Number=1.1)
+
+	μ_min = min + 0.05
+	μ_max = max - 0.05
 
 	n_obs = size(flux_obs, 1)
 	n_comp_star = size(tfm.star.lm.M, 2) + 1
 	n_comp_tel = size(tfm.tel.lm.M, 2)
 
 	flux_star = spectra_interp(flux_obs, tfm.lih_o2b)
-	tfm.star.lm.μ[:] = make_template(flux_star)
+	tfm.star.lm.μ[:] = make_template(flux_star; min=μ_min, max=μ_max)
 	_, M_star, s_star, _, rvs_notel =
 	    DPCA(flux_star, tfm.star.λ; template=tfm.star.lm.μ, num_components=n_comp_star)
 
@@ -167,26 +187,29 @@ function initialize!(tfm, flux_obs::Matrix)
 	# telluric model with stellar template
 	flux_tel = spectra_interp(flux_obs, tfm.lih_o2t) ./
 		spectra_interp(repeat(tfm.star.lm.μ, 1, n_obs), tfm.lih_b2t)
-	tfm.tel.lm.μ[:] = make_template(flux_tel)
+	tfm.tel.lm.μ[:] = make_template(flux_tel; min=μ_min, max=μ_max)
 	_, tfm.tel.lm.M[:, :], tfm.tel.lm.s[:, :], _ =
 	    fit_gen_pca(flux_tel; num_components=n_comp_tel, mu=tfm.tel.lm.μ)
 
 	# stellar model with telluric template
 	flux_star = spectra_interp(flux_obs, tfm.lih_o2b) ./
 		spectra_interp(repeat(tfm.tel.lm.μ, 1, n_obs), tfm.lih_t2b)
-	tfm.star.lm.μ[:] = make_template(flux_star)
+	tfm.star.lm.μ[:] = make_template(flux_star; min=μ_min, max=μ_max)
 	_, M_star[:, :], s_star[:, :], _, rvs_notel[:] =
 	    DPCA(flux_star, tfm.star.λ; template=tfm.star.lm.μ, num_components=n_comp_star)
 
 	# telluric model with updated stellar template
 	flux_tel = spectra_interp(flux_obs, tfm.lih_o2t) ./
 		spectra_interp(repeat(tfm.star.lm.μ, 1, n_obs), tfm.lih_b2t)
-	tfm.tel.lm.μ[:] = make_template(flux_tel)
+	tfm.tel.lm.μ[:] = make_template(flux_tel; min=μ_min, max=μ_max)
 	_, tfm.tel.lm.M[:, :], tfm.tel.lm.s[:, :], _ =
 	    fit_gen_pca(flux_tel; num_components=n_comp_tel, mu=tfm.tel.lm.μ)
 
 	tfm.star.lm.M[:, :], tfm.star.lm.s[:] = M_star[:, 2:end], s_star[2:end, :]
 	tfm.rv.lm.M[:, :], tfm.rv.lm.s[:] = M_star[:, 1], s_star[1, :]'
+
+	fix_FullLinearModel_s!(tfm.star.lm, min, max)
+	fix_FullLinearModel_s!(tfm.tel.lm, min, max)
 
 	return rvs_notel, rvs_naive
 end
@@ -194,7 +217,7 @@ end
 L1(thing) = sum(abs.(thing))
 L2(thing) = sum(thing .* thing)
 
-function model_prior(lm::FullLinearModel, coeffs::Vector{<:Real})
+function model_prior(lm, coeffs::Vector{<:Real})
     μ_mod = lm.μ .- 1
     return (coeffs[3] * L2(μ_mod)) +
 	(coeffs[2] * (L1(μ_mod) + (coeffs[1] * sum(μ_mod[μ_mod.>0])))) +

@@ -28,10 +28,20 @@ function searchsortednearest(a::AbstractVector{T} where T<:Real, x::AbstractVect
    	return idxs
 end
 
+function clip_vector!(vec::Vector; max::Number=Inf, min::Number=-Inf)
+	vec[vec .< min] .= min
+	vec[vec .> max] .= max
+end
 
-make_template(matrix::Matrix{T}) where {T<:Real} = vec(median(matrix, dims=2))
-make_template_mean(matrix::Matrix{T}) where {T<:Real} =
-	vec(mean(matrix, dims=2))
+function make_template(matrix::Matrix; use_mean::Bool=true, kwargs...)
+	if use_mean
+		result = vec(median(matrix, dims=2))
+	else
+		result = vec(mean(matrix, dims=2))
+	end
+	clip_vector!(result; kwargs...)
+	return result
+end
 
 function shift_log_λ(v::Unitful.Velocity, log_λ::Vector{T}) where {T<:Real}
 	return log_λ .+ (log((1.0 + v / light_speed) / (1.0 - v / light_speed)) / 2)

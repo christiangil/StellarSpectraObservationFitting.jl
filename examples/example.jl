@@ -18,8 +18,8 @@ tf = Main.telfitting
 ## Loading (pregenerated) data
 
 include("data_structs.jl")
-@load "E:/telfitting/telfitting_workspace_smol.jld2" Spectra airmasses obs_resolution obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep
-# @load "E:/telfitting/telfitting_workspace.jld2" quiet λ_nu
+@load "E:/telfitting/telfitting_workspace_smol.jld2" Spectra airmasses obs_resolution obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
+# @load "E:/telfitting/telfitting_workspace.jld2" quiet λ_nu true_tels_mean
 
 ## Setting up necessary variables and functions
 
@@ -57,58 +57,32 @@ plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 40
 # scatter!(plt, times_nu, rvs_notel)
 # scatter!(plt, times_nu, rvs_activ_no_noise + rvs_kep_nu)
 
-
 tel_prior() = tf.model_prior(tf_model.tel.lm, [2, 1e3, 1e4, 1e4, 1e7])
 star_prior() = tf.model_prior(tf_model.star.lm, [2, 1e-1, 1e3, 1e6, 1e7])
 
 _loss(tel, star, rv, flux_obs, var_obs) =
     sum((((tel .* (star + rv)) - flux_obs) .^ 2) ./ var_obs)
-loss_ts(rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), rv, flux_obs, var_obs) + tel_prior() + star_prior()
-loss_rv(tel, star, flux_obs, var_obs) = _loss(tel, star, tf.rv_model(tf_model), flux_obs, var_obs)
+_loss_ts(rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), rv, flux_obs, var_obs) + tel_prior() + star_prior()
+_loss_rv(tel, star, flux_obs, var_obs) = _loss(tel, star, tf.rv_model(tf_model), flux_obs, var_obs)
+loss() = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
+loss_ts() = _loss_ts(tf.rv_model(tf_model), flux_obs, var_obs)
+loss_rv() = _loss_rv(tf.tel_model(tf_model), tf.star_model(tf_model), flux_obs, var_obs)
 
 using Flux, Zygote, Optim
-# m      = Chain(Dense(1,3,tanh) , Dense(3,1))
-# x      = LinRange(-pi,pi,100)'
-# y      = sin.(x)
-# loss() = mean(abs2, m(x) .- y)
-# Zygote.refresh()
-# pars   = Flux.params(m)
-# lossfun, gradfun, fg!, p0 = tf.optfuns(loss, pars)
-# OOptions = Optim.Options(iterations=1000)
-# res = Optim.optimize(Optim.only_fg!(fg!), p0, OOptions)
-#
-#
-# plot(m(x)')
-
-
-OOptions = Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5)
 
 θ_ts = params(tf_model.star.lm.M, tf_model.star.lm.s, tf_model.star.lm.μ, tf_model.tel.lm.M, tf_model.tel.lm.s, tf_model.tel.lm.μ)
 θ_rv = params(tf_model.rv.lm.s)
-
-tf_model.rv.lm.M[:] = tf.calc_doppler_component_RVSKL(tf_model.star.λ, tf_model.star.lm.μ)
-lossfun, gradfun, fg!, p0 = tf.optfuns(() -> loss_rv(tf.tel_model(tf_model), tf.star_model(tf_model), flux_obs, var_obs), θ_rv)
-res = Optim.optimize(Optim.only_fg!(fg!), p0, OOptions)
-
-s_star_var ./= 5
-
-θ_tot = [M_tel, s_tel, μ_tel, M_star_var, s_star_var, μ_star, s_rv]
-θ_tel = [M_tel, s_tel, μ_tel]
-θ_star = [M_star_var, s_star_var, μ_star]
-θ_rv = [s_rv]
-
-tel_model_result[:, :] = tel_model(θ_tel)
-rv_model_result = rv_model(μ_star, θ_rv)
-star_model_result = star_model(θ_star)
+f_ts, g_ts, fg_ts!, p0_ts = tf.optfuns(loss_ts, θ_ts)
+f_rv, g_rv, fg_rv!, p0_rv = tf.optfuns(loss_rv, θ_rv)
 
 resid_stds = [std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise)]
-losses = [loss(tel_model_result, star_model_result, rv_model_result)]
+losses = [loss()]
 tracker = 0
 
-function status_plot(θ_tot; plot_epoch=1)
-    tel_model_result = tel_model(view(θ_tot, 1:3))
-    star_model_result = star_model(view(θ_tot, 4:6))
-    rv_model_result = _rv_model(M_rv, view(θ_tot, 7))
+function status_plot(; plot_epoch=1)
+    tel_model_result = tf.tel_model(tf_model)
+    star_model_result = tf.star_model(tf_model)
+    rv_model_result = tf.rv_model(tf_model)
 
     l = @layout [a; b]
     # predict_plot = plot_spectrum(; legend = :bottomleft, size=(800,1200), layout = l)
@@ -118,16 +92,20 @@ function status_plot(θ_tot; plot_epoch=1)
     plot!(predict_plot[1], obs_λ, true_tels[:, plot_epoch], label="true tel")
     plot!(predict_plot[1], obs_λ, flux_obs[:, plot_epoch] ./ (star_model_result[:, plot_epoch] + rv_model_result[:, plot_epoch]), label="predicted tel", alpha = 0.5)
     plot!(predict_plot[1], obs_λ, tel_model_result[:, plot_epoch], label="model tel: $tracker", alpha = 0.5)
-    plot_star_λs = exp.(Spectra[plot_epoch].log_λ_star)
+    plot_star_λs = exp.(Spectra[plot_epoch].log_λ_bary)
     plot!(predict_plot[2], plot_star_λs, flux_obs[:, plot_epoch] ./ true_tels[:, plot_epoch], label="true star", )
     plot!(predict_plot[2], plot_star_λs, flux_obs[:, plot_epoch] ./ tel_model_result[:, plot_epoch], label="predicted star", alpha = 0.5)
     plot!(predict_plot[2], plot_star_λs, star_model_result[:, plot_epoch] + rv_model_result[:, plot_epoch], label="model star: $tracker", alpha = 0.5)
     display(predict_plot)
 end
 plot_epoch = 60
-status_plot(θ_tot; plot_epoch=plot_epoch)
+status_plot(; plot_epoch=plot_epoch)
 
-OOptions = Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5)
+OOptions = Optim.Options(iterations=30, f_tol=1e-3, g_tol=1e5)
+
+# Optim.optimize(Optim.only_fg!(fg_ts!), p0_ts, OOptions)
+# tf_model.rv.lm.M[:] = tf.calc_doppler_component_RVSKL(tf_model.star.λ, tf_model.star.lm.μ)
+# Optim.optimize(Optim.only_fg!(fg_rv!), p0_rv, OOptions)
 
 println("guess $tracker, std=$(round(std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise), digits=5))")
 rvs_notel_opt = copy(rvs_notel)
