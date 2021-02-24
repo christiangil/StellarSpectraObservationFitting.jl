@@ -85,3 +85,9 @@ function optfuns(loss, pars::Union{Flux.Params, Zygote.Params})
     end
     lossfun, gradfun, fg!, p0
 end
+
+
+function Flux_optimize!(fg!::Function, p0::Vector, θ::Flux.Params, OOptions::Optim.Options)
+    Optim.optimize(Optim.only_fg!(fg!), p0, OOptions)
+    copyto!(p0, θ)
+end

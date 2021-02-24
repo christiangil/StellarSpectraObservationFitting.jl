@@ -48,31 +48,26 @@ tel_model_res = obs_resolution
 
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, flux_obs)
 
-plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (nm)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
-plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
-
-
-# plt = plot_rv()
-# scatter!(plt, times_nu, rvs_naive)
-# scatter!(plt, times_nu, rvs_notel)
-# scatter!(plt, times_nu, rvs_activ_no_noise + rvs_kep_nu)
-
 tel_prior() = tf.model_prior(tf_model.tel.lm, [2, 1e3, 1e4, 1e4, 1e7])
 star_prior() = tf.model_prior(tf_model.star.lm, [2, 1e-1, 1e3, 1e6, 1e7])
 
 _loss(tel, star, rv, flux_obs, var_obs) =
     sum((((tel .* (star + rv)) - flux_obs) .^ 2) ./ var_obs)
-_loss_ts(rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), rv, flux_obs, var_obs) + tel_prior() + star_prior()
+_loss_tel(star, rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), star, rv, flux_obs, var_obs) + tel_prior() + star_prior()
+_loss_star(tel, rv, flux_obs, var_obs) = _loss(tel, tf.star_model(tf_model), rv, flux_obs, var_obs) + tel_prior() + star_prior()
 _loss_rv(tel, star, flux_obs, var_obs) = _loss(tel, star, tf.rv_model(tf_model), flux_obs, var_obs)
 loss() = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
-loss_ts() = _loss_ts(tf.rv_model(tf_model), flux_obs, var_obs)
+loss_tel() = _loss_tel(tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
+loss_star() = _loss_star(tf.tel_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
 loss_rv() = _loss_rv(tf.tel_model(tf_model), tf.star_model(tf_model), flux_obs, var_obs)
 
 using Flux, Zygote, Optim
 
-θ_ts = params(tf_model.star.lm.M, tf_model.star.lm.s, tf_model.star.lm.μ, tf_model.tel.lm.M, tf_model.tel.lm.s, tf_model.tel.lm.μ)
+θ_tel = params(tf_model.tel.lm.M, tf_model.tel.lm.s, tf_model.tel.lm.μ)
+θ_star = params(tf_model.star.lm.M, tf_model.star.lm.s, tf_model.star.lm.μ)
 θ_rv = params(tf_model.rv.lm.s)
-f_ts, g_ts, fg_ts!, p0_ts = tf.optfuns(loss_ts, θ_ts)
+f_tel, g_tel, fg_tel!, p0_tel = tf.optfuns(loss_tel, θ_tel)
+f_star, g_star, fg_star!, p0_star = tf.optfuns(loss_star, θ_star)
 f_rv, g_rv, fg_rv!, p0_rv = tf.optfuns(loss_rv, θ_rv)
 
 resid_stds = [std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise)]
@@ -101,37 +96,35 @@ end
 plot_epoch = 60
 status_plot(; plot_epoch=plot_epoch)
 
-OOptions = Optim.Options(iterations=5, f_tol=1e-3, g_tol=1e5)
+OOptions = Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5)
 
 # Optim.optimize(Optim.only_fg!(fg_ts!), p0_ts, OOptions)
 # tf_model.rv.lm.M[:] = tf.calc_doppler_component_RVSKL(tf_model.star.λ, tf_model.star.lm.μ)
 # Optim.optimize(Optim.only_fg!(fg_rv!), p0_rv, OOptions)
 
-function Flux_optimize!(fg!::Function, p0::Vector, θ::Flux.Params, OOptions::Optim.Options)
-    Optim.optimize(Optim.only_fg!(fg!), p0, OOptions)
-    tf.copyto!(p0, θ)
-end
-
 println("guess $tracker, std=$(round(std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise), digits=5))")
 rvs_notel_opt = copy(rvs_notel)
 @time for i in 1:3
-    tracker += 1
-    println("guess $tracker")
+    
+    # optimize star
+    tf.Flux_optimize!(fg_star!, p0_star, θ_star, OOptions)
 
-    # optimize star and tellurics
-    Flux_optimize!(fg_ts!, p0_ts, θ_ts, OOptions)
+    # optimize tellurics
+    tf.Flux_optimize!(fg_tel!, p0_tel, θ_tel, OOptions)
 
     # optimize RVs
     tf_model.rv.lm.M[:] = tf.calc_doppler_component_RVSKL(tf_model.star.λ, tf_model.star.lm.μ)
-    Flux_optimize!(fg_rv!, p0_rv, θ_rv, OOptions)
+    tf.Flux_optimize!(fg_rv!, p0_rv, θ_rv, OOptions)
     rvs_notel_opt[:] = (tf_model.rv.lm.s .* light_speed_nu)'
 
     append!(resid_stds, [std(rvs_notel_opt - rvs_kep_nu - rvs_activ_no_noise)])
     append!(losses, [loss()])
 
+    status_plot(; plot_epoch=plot_epoch)
+    tracker += 1
+    println("guess $tracker")
     println("loss   = $(losses[end])")
     println("rv std = $(round(std((rvs_notel_opt - rvs_kep_nu) - rvs_activ_no_noise), digits=5))")
-    status_plot(; plot_epoch=plot_epoch)
 end
 
 plot(resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS", legend=false)
@@ -139,9 +132,10 @@ plot(losses; xlabel="iter", ylabel="loss", legend=false)
 
 ## Plots
 
-
-
 if plot_stuff
+
+    plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (nm)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
+    plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
 
     # Compare first guess at RVs to true signal
     predict_plot = plot_rv()
