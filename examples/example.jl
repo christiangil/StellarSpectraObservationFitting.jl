@@ -12,7 +12,7 @@ Pkg.activate("examples")
 Pkg.instantiate()
 
 using Plots
-include("C:/Users/Christian/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
+@time include("C:/Users/Christian/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
 tf = Main.telfitting
 
 ## Loading (pregenerated) data
@@ -74,6 +74,8 @@ resid_stds = [std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise)]
 losses = [loss()]
 tracker = 0
 
+plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (nm)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
+plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
 function status_plot(; plot_epoch=1)
     tel_model_result = tf.tel_model(tf_model)
     star_model_result = tf.star_model(tf_model)
@@ -105,7 +107,7 @@ OOptions = Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5)
 println("guess $tracker, std=$(round(std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise), digits=5))")
 rvs_notel_opt = copy(rvs_notel)
 @time for i in 1:3
-    
+
     # optimize star
     tf.Flux_optimize!(fg_star!, p0_star, θ_star, OOptions)
 
@@ -133,9 +135,6 @@ plot(losses; xlabel="iter", ylabel="loss", legend=false)
 ## Plots
 
 if plot_stuff
-
-    plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (nm)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
-    plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
 
     # Compare first guess at RVs to true signal
     predict_plot = plot_rv()

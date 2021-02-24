@@ -1,7 +1,7 @@
 function create_λ_template(log_λ_obs, resolution)
     log_min_wav, log_max_wav = [minimum(log_λ_obs), maximum(log_λ_obs)]
     len = Int(ceil((exp(log_max_wav) - exp(log_min_wav)) * resolution / exp((log_max_wav + log_min_wav)/2)))
-    log_Δλ = (log(log_max_wav) - log(log_min_wav)) / len
+    log_Δλ = (log_max_wav - log_min_wav) / len
     len += 2
     log_λ_template = range(log_min_wav - log_Δλ; length = len,  stop = log_max_wav + log_Δλ)
     λ_template = exp.(log_λ_template)
@@ -153,7 +153,7 @@ star_model(tfm) = spectra_interp(tfm.star.lm(), tfm.lih_b2o)
 rv_model(tfm) = spectra_interp(tfm.rv.lm(), tfm.lih_b2o)
 
 
-function fix_FullLinearModel_s!(flm::FullLinearModel, min::Number, max::Number)
+function fix_FullLinearModel_s!(flm, min::Number, max::Number)
 	@assert all(min .< flm.μ .< max)
 	result = ones(typeof(flm.μ[1]), length(flm.μ))
 	for i in 1:size(flm.s, 2)
