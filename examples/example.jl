@@ -4,7 +4,7 @@ Pkg.activate("examples")
 # Pkg.add("JLD2")
 # Pkg.add("UnitfulAstro")
 # Pkg.add("Unitful")
-# Pkg.add(;path="C:/Users/Christian/Dropbox/GP_research/julia/telfitting")
+# Pkg.add(;path="C:/Users/chris/Dropbox/GP_research/julia/telfitting")
 # Pkg.add("Stheno")
 # Pkg.add("TemporalGPs")
 # Pkg.add("Distributions")
@@ -12,13 +12,13 @@ Pkg.activate("examples")
 Pkg.instantiate()
 
 using Plots
-@time include("C:/Users/Christian/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
+@time include("C:/Users/chris/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
 tf = Main.telfitting
 
 ## Loading (pregenerated) data
 
 include("data_structs.jl")
-@load "E:/telfitting/telfitting_workspace_smol.jld2" Spectra airmasses obs_resolution obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
+@load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" Spectra airmasses obs_resolution obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
 # @load "E:/telfitting/telfitting_workspace.jld2" quiet λ_nu true_tels_mean
 
 ## Setting up necessary variables and functions
@@ -53,8 +53,8 @@ star_prior() = tf.model_prior(tf_model.star.lm, [2, 1e-1, 1e3, 1e6, 1e7])
 
 _loss(tel, star, rv, flux_obs, var_obs) =
     sum((((tel .* (star + rv)) - flux_obs) .^ 2) ./ var_obs)
-_loss_tel(star, rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), star, rv, flux_obs, var_obs) + tel_prior() + star_prior()
-_loss_star(tel, rv, flux_obs, var_obs) = _loss(tel, tf.star_model(tf_model), rv, flux_obs, var_obs) + tel_prior() + star_prior()
+_loss_tel(star, rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), star, rv, flux_obs, var_obs) + tel_prior()
+_loss_star(tel, rv, flux_obs, var_obs) = _loss(tel, tf.star_model(tf_model), rv, flux_obs, var_obs) + star_prior()
 _loss_rv(tel, star, flux_obs, var_obs) = _loss(tel, star, tf.rv_model(tf_model), flux_obs, var_obs)
 loss() = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
 loss_tel() = _loss_tel(tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
