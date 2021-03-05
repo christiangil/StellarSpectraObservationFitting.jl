@@ -16,7 +16,16 @@ tf = Main.telfitting
 
 ## Setting up necessary variables and functions
 
-@load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k" tf_model n_obs len_obs flux_obs var_obs log_λ_obs log_λ_star star_model_res tel_model_res
+@load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k" tf_model n_obs len_obs tf_data star_model_res tel_model_res
+
+using StatsBase
+
+n_obs_train = Int(round(0.75 * n_obs))
+testing_inds = sort(sample(1:n_obs, n_obs-n_obs_train; replace=false))
+training_inds = [i for i in 1:n_obs if !(i in testing_inds)]
+
+tf_data_test = tf.TFData(tf_data, testing_inds)
+tf_data_train = tf.TFData(tf_data, training_inds)
 
 # plot(λ_nu, quiet; label="SOAP", xrange=(610, 670))
 # plot!(tfm.star.λ, tf_model.star.lm.μ[:]; label="template")
@@ -28,8 +37,8 @@ tf = Main.telfitting
 
 _loss(tel, star, rv, flux_obs, var_obs) =
     sum((((tel .* (star + rv)) - flux_obs) .^ 2) ./ var_obs)
-_loss_tel(star, rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), star, rv, flux_obs, var_obs) + tel_prior(tf_model)
-_loss_star(tel, rv, flux_obs, var_obs) = _loss(tel, tf.star_model(tf_model), rv, flux_obs, var_obs) + star_prior(tf_model)
+_loss_tel(star, rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), star, rv, flux_obs, var_obs) + tf.tel_prior(tf_model)
+_loss_star(tel, rv, flux_obs, var_obs) = _loss(tel, tf.star_model(tf_model), rv, flux_obs, var_obs) + tf.star_prior(tf_model)
 _loss_rv(tel, star, flux_obs, var_obs) = _loss(tel, star, tf.rv_model(tf_model), flux_obs, var_obs)
 loss() = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
 loss_tel() = _loss_tel(tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
