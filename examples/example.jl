@@ -19,7 +19,7 @@ tf = Main.telfitting
 
 include("data_structs.jl")
 @load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" Spectra airmasses obs_resolution obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
-# @load "E:/telfitting/telfitting_workspace.jld2" quiet λ_nu true_tels_mean
+@load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_150k.jld2" quiet λ_nu true_tels_mean
 
 ## Setting up necessary variables and functions
 

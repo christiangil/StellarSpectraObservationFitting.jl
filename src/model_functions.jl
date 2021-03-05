@@ -173,7 +173,7 @@ function initialize!(tfm, flux_obs::Matrix; min::Number=0.05, max::Number=1.1)
 	μ_min = min + 0.05
 	μ_max = max - 0.05
 
-	n_obs = size(flux_obs, 1)
+	n_obs = size(flux_obs, 2)
 	n_comp_star = size(tfm.star.lm.M, 2) + 1
 	n_comp_tel = size(tfm.tel.lm.M, 2)
 
