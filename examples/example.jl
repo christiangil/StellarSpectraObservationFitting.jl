@@ -1,52 +1,22 @@
 ## Setup
 using Pkg
 Pkg.activate("examples")
-# Pkg.add("JLD2")
-# Pkg.add("UnitfulAstro")
-# Pkg.add("Unitful")
-# Pkg.add(;path="C:/Users/chris/Dropbox/GP_research/julia/telfitting")
-# Pkg.add("Stheno")
-# Pkg.add("TemporalGPs")
-# Pkg.add("Distributions")
-# Pkg.add("Plots")
 Pkg.instantiate()
 
 using Plots
+using JLD2
 @time include("C:/Users/chris/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
 tf = Main.telfitting
 
 ## Loading (pregenerated) data
 
-include("data_structs.jl")
-@load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" Spectra airmasses obs_resolution obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
-@load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_150k.jld2" quiet λ_nu true_tels_mean
+# include("data_structs.jl")
+# @load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" Spectra airmasses obs_resolution obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
+# @load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_150k.jld2" quiet λ_nu true_tels_mean
 
 ## Setting up necessary variables and functions
 
-light_speed_nu = 299792458
-plot_stuff = true
-
-n_obs = length(Spectra)
-len_obs = length(Spectra[1].log_λ_obs)
-flux_obs = ones(len_obs, n_obs)
-var_obs = zeros(len_obs, n_obs)
-log_λ_obs = zeros(len_obs, n_obs)
-log_λ_star = zeros(len_obs, n_obs)
-for i in 1:n_obs # 13s
-    flux_obs[:, i] = Spectra[i].flux_obs
-    var_obs[:, i] = Spectra[i].var_obs
-    log_λ_obs[:, i] = Spectra[i].log_λ_obs
-    log_λ_star[:, i] = Spectra[i].log_λ_bary
-end
-
-## Initializing models
-
-star_model_res = 2 * sqrt(2) * obs_resolution
-tel_model_res = obs_resolution
-
-@time tf_model = tf.TFModel(log_λ_obs, log_λ_star, star_model_res, tel_model_res)
-
-@time rvs_notel, rvs_naive = tf.initialize!(tf_model, flux_obs, var_obs, log_λ_obs, log_λ_star; use_gp=true)
+@load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k" tf_model n_obs len_obs flux_obs var_obs log_λ_obs log_λ_star star_model_res tel_model_res
 
 # plot(λ_nu, quiet; label="SOAP", xrange=(610, 670))
 # plot!(tfm.star.λ, tf_model.star.lm.μ[:]; label="template")
@@ -56,13 +26,10 @@ tel_model_res = obs_resolution
 # plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 1]; label="M 1")
 # plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 2]; label="M 2")
 
-tel_prior() = tf.model_prior(tf_model.tel.lm, [2, 1e3, 1e4, 1e4, 1e7])
-star_prior() = tf.model_prior(tf_model.star.lm, [2, 1e-1, 1e3, 1e6, 1e7])
-
 _loss(tel, star, rv, flux_obs, var_obs) =
     sum((((tel .* (star + rv)) - flux_obs) .^ 2) ./ var_obs)
-_loss_tel(star, rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), star, rv, flux_obs, var_obs) + tel_prior()
-_loss_star(tel, rv, flux_obs, var_obs) = _loss(tel, tf.star_model(tf_model), rv, flux_obs, var_obs) + star_prior()
+_loss_tel(star, rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), star, rv, flux_obs, var_obs) + tel_prior(tf_model)
+_loss_star(tel, rv, flux_obs, var_obs) = _loss(tel, tf.star_model(tf_model), rv, flux_obs, var_obs) + star_prior(tf_model)
 _loss_rv(tel, star, flux_obs, var_obs) = _loss(tel, star, tf.rv_model(tf_model), flux_obs, var_obs)
 loss() = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
 loss_tel() = _loss_tel(tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
@@ -114,7 +81,8 @@ OOptions = Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5)
 
 println("guess $tracker, std=$(round(std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise), digits=5))")
 rvs_notel_opt = copy(rvs_notel)
-@time for i in 1:3
+light_speed_nu = 299792458
+@time for i in 1:4
 
     # optimize star
     tf.Flux_optimize!(fg_star!, p0_star, θ_star, OOptions)
@@ -141,6 +109,8 @@ plot(resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS", legend=fa
 plot(losses; xlabel="iter", ylabel="loss", legend=false)
 
 ## Plots
+
+plot_stuff = true
 
 if plot_stuff
 

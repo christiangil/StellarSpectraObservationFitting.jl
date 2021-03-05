@@ -1,8 +1,3 @@
-using JLD2
-using Stheno
-using TemporalGPs
-using UnitfulAstro, Unitful
-
 struct SpectraHolder{T<:AbstractArray{<:Real,1}}
     log_λ_obs::T
     log_λ_bary::T

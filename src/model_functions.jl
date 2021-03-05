@@ -123,6 +123,8 @@ struct TFModel{T<:Number}
     tel::TFSubmodel{T}
     star::TFSubmodel{T}
 	rv::TFSubmodel{T}
+	reg_tel::Vector{T}
+	reg_star::Vector{T}
     lih_t2b::LinearInterpolationHelper
     lih_b2t::LinearInterpolationHelper
     lih_o2b::LinearInterpolationHelper
@@ -150,12 +152,17 @@ struct TFModel{T<:Number}
             star_log_λ_tel[:, i] = star.log_λ .+ star_dop[i]
         end
         lih_t2b, lih_b2t = LinearInterpolationHelper_maker(tel.log_λ, star_log_λ_tel)
-        return TFModel(tel, star, rv, lih_t2b, lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t)
+        return TFModel(tel, star, rv, [2, 1e3, 1e4, 1e4, 1e7], [2, 1e-1, 1e3, 1e6, 1e7], lih_t2b, lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t)
     end
-    TFModel(tel::TFSubmodel{T}, star, rv, lih_t2b, lih_b2t, lih_o2b, lih_b2o,
-		lih_t2o, lih_o2t) where {T<:Number} =
-		new{T}(tel, star, rv, lih_t2b, lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t)
+    function TFModel(tel::TFSubmodel{T}, star, rv, reg_tel, reg_star, lih_t2b,
+		lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t) where {T<:Number}
+		@assert length(reg_tel) == length(reg_star) == 5
+		return new{T}(tel, star, rv, lih_t2b, lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t)
+	end
 end
+
+tel_prior(tfm) = model_prior(tfm.tel.lm, reg_tel)
+star_prior(tfm) = model_prior(tfm.star.lm, reg_star)
 
 spectra_interp(og_vals::Matrix, lih) =
     (og_vals[lih.li] .* (1 .- lih.ratios)) + (og_vals[lih.li .+ 1] .* (lih.ratios))
