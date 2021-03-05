@@ -1,3 +1,5 @@
+using TemporalGPs, Stheno, Distributions
+
 function create_λ_template(log_λ_obs, resolution)
     log_min_wav, log_max_wav = [minimum(log_λ_obs), maximum(log_λ_obs)]
     len = Int(ceil((exp(log_max_wav) - exp(log_min_wav)) * resolution / exp((log_max_wav + log_min_wav)/2)))
@@ -107,6 +109,16 @@ struct TFSubmodel{T<:Number}
     end
 end
 
+function _shift_log_λ_model(log_λ_obs_from, log_λ_obs_to, log_λ_model_from)
+	n_obs = size(log_λ_obs_from, 2)
+	dop = [log_λ_obs_from[1, i] - log_λ_obs_to[1, i] for i in 1:n_obs]
+	log_λ_model_to = ones(length(log_λ_model_from), n_obs)
+	for i in 1:n_obs
+		log_λ_model_to[:, i] = log_λ_model_from .+ dop[i]
+	end
+	return log_λ_model_to
+end
+
 struct TFModel{T<:Number}
     tel::TFSubmodel{T}
     star::TFSubmodel{T}
@@ -167,8 +179,54 @@ function fix_FullLinearModel_s!(flm, min::Number, max::Number)
 	end
 end
 
+function get_marginal_GP(
+    finite_GP::Distribution{Multivariate,Continuous},
+    ys::AbstractVector,
+    xs::AbstractVector)
+    gp_post = posterior(finite_GP, ys)
+    gpx_post = gp_post(xs)
+    return TemporalGPs.marginals(gpx_post)
+end
 
-function initialize!(tfm, flux_obs::Matrix; min::Number=0.05, max::Number=1.1)
+function get_mean_GP(
+    finite_GP::Distribution{Multivariate,Continuous},
+    ys::AbstractVector,
+    xs::AbstractVector)
+    return mean.(get_marginal_GP(finite_GP, ys, xs))
+end
+
+function build_gp(θ)
+    σ², l = θ
+    k = σ² * TemporalGPs.stretch(TemporalGPs.Matern52(), 1 / l)
+    f_naive = TemporalGPs.GP(k, TemporalGPs.GPC())
+    f = to_sde(f_naive, SArrayStorage(Float64))
+    #f = to_sde(f_naive)   # if develop issues with StaticArrays could revert to this
+end
+
+SOAP_gp = build_gp([3.3270754364467443, 9.021560480866474e-5])
+
+
+function _spectra_interp_gp!(fluxes, vars, log_λ, flux_obs, var_obs, log_λ_obs; gp_mean::Number=1.)
+	for i in 1:size(flux_obs, 2)
+		gp = get_marginal_GP(SOAP_gp(log_λ_obs[:, i], var_obs[:, i]), flux_obs[:, i] .- gp_mean, log_λ)
+		fluxes[:, i] = mean.(gp) .+ gp_mean
+        vars[:, i] = var.(gp)
+	end
+end
+
+function _spectra_interp_gp_div_gp!(fluxes::Matrix, vars::Matrix, log_λ::AbstractVector, flux_obs::Matrix, var_obs::Matrix, log_λ_obs::Matrix, flux_other::Matrix, var_other::Matrix, log_λ_other::Matrix; gp_mean::Number=1.)
+	for i in 1:size(flux_obs, 2)
+		gpn = get_marginal_GP(SOAP_gp(log_λ_obs[:, i], var_obs[:, i]), flux_obs[:, i] .- gp_mean, log_λ)
+		gpd = get_marginal_GP(SOAP_gp(log_λ_other[:, i], var_other[:, i]), flux_other[:, i] .- gp_mean, log_λ)
+		gpn_μ = mean.(gpn) .+ gp_mean
+		gpd_μ = mean.(gpd) .+ gp_mean
+		fluxes[:, i] = gpn_μ ./ gpd_μ
+        vars[:, i] = (var.(gpn) .+ ((gpn_μ .^ 2 .* var.(gpd)) ./ (gpd_μ .^2))) ./ (gpd_μ .^2)
+	end
+end
+
+
+function initialize!(tfm, flux_obs::Matrix, var_obs::Matrix, log_λ_obs::Matrix, log_λ_star::Matrix; min::Number=0.05, max::Number=1.1, use_gp::Bool=false)
 
 	μ_min = min + 0.05
 	μ_max = max - 0.05
@@ -177,30 +235,53 @@ function initialize!(tfm, flux_obs::Matrix; min::Number=0.05, max::Number=1.1)
 	n_comp_star = size(tfm.star.lm.M, 2) + 1
 	n_comp_tel = size(tfm.tel.lm.M, 2)
 
-	flux_star = spectra_interp(flux_obs, tfm.lih_o2b)
+	if use_gp
+		star_log_λ_tel = _shift_log_λ_model(log_λ_obs, log_λ_star, tfm.star.log_λ)
+		tel_log_λ_star = _shift_log_λ_model(log_λ_star, log_λ_obs, tfm.tel.log_λ)
+		flux_star = ones(length(tfm.star.log_λ), n_obs)
+		vars_star = ones(length(tfm.star.log_λ), n_obs)
+		flux_tel = ones(length(tfm.tel.log_λ), n_obs)
+		vars_tel = ones(length(tfm.tel.log_λ), n_obs)
+		_spectra_interp_gp!(flux_star, vars_star, tfm.star.log_λ, flux_obs, var_obs, log_λ_star)
+	else
+		flux_star = spectra_interp(flux_obs, tfm.lih_o2b)
+	end
+	tfm.star.lm.μ[:] = make_template(flux_star; min=μ_min, max=μ_max)
+	_, _, _, _, rvs_naive =
+	    DPCA(flux_star, tfm.star.λ; template=tfm.star.lm.μ, num_components=1)
+
+	# telluric model with stellar template
+	if use_gp
+		flux_star .= tfm.star.lm.μ
+		_spectra_interp_gp_div_gp!(flux_tel, vars_tel, tfm.tel.log_λ, flux_obs, var_obs, log_λ_obs, flux_star, vars_star, star_log_λ_tel)
+	else
+		flux_tel = spectra_interp(flux_obs, tfm.lih_o2t) ./
+			spectra_interp(repeat(tfm.star.lm.μ, 1, n_obs), tfm.lih_b2t)
+	end
+	tfm.tel.lm.μ[:] = make_template(flux_tel; min=μ_min, max=μ_max)
+	# _, tfm.tel.lm.M[:, :], tfm.tel.lm.s[:, :], _ =
+	#     fit_gen_pca(flux_tel; num_components=n_comp_tel, mu=tfm.tel.lm.μ)
+
+	# stellar model with telluric template
+	if use_gp
+		flux_tel .= tfm.tel.lm.μ
+		_spectra_interp_gp_div_gp!(flux_star, vars_star, tfm.star.log_λ, flux_obs, var_obs, log_λ_star, flux_tel, vars_tel, tel_log_λ_star)
+	else
+		flux_star = spectra_interp(flux_obs, tfm.lih_o2b) ./
+			spectra_interp(repeat(tfm.tel.lm.μ, 1, n_obs), tfm.lih_t2b)
+	end
 	tfm.star.lm.μ[:] = make_template(flux_star; min=μ_min, max=μ_max)
 	_, M_star, s_star, _, rvs_notel =
 	    DPCA(flux_star, tfm.star.λ; template=tfm.star.lm.μ, num_components=n_comp_star)
 
-	rvs_naive = copy(rvs_notel)
-
-	# telluric model with stellar template
-	flux_tel = spectra_interp(flux_obs, tfm.lih_o2t) ./
-		spectra_interp(repeat(tfm.star.lm.μ, 1, n_obs), tfm.lih_b2t)
-	tfm.tel.lm.μ[:] = make_template(flux_tel; min=μ_min, max=μ_max)
-	_, tfm.tel.lm.M[:, :], tfm.tel.lm.s[:, :], _ =
-	    fit_gen_pca(flux_tel; num_components=n_comp_tel, mu=tfm.tel.lm.μ)
-
-	# stellar model with telluric template
-	flux_star = spectra_interp(flux_obs, tfm.lih_o2b) ./
-		spectra_interp(repeat(tfm.tel.lm.μ, 1, n_obs), tfm.lih_t2b)
-	tfm.star.lm.μ[:] = make_template(flux_star; min=μ_min, max=μ_max)
-	_, M_star[:, :], s_star[:, :], _, rvs_notel[:] =
-	    DPCA(flux_star, tfm.star.λ; template=tfm.star.lm.μ, num_components=n_comp_star)
-
 	# telluric model with updated stellar template
-	flux_tel = spectra_interp(flux_obs, tfm.lih_o2t) ./
-		spectra_interp(repeat(tfm.star.lm.μ, 1, n_obs), tfm.lih_b2t)
+	if use_gp
+		flux_star .= tfm.star.lm.μ
+		_spectra_interp_gp_div_gp!(flux_tel, vars_tel, tfm.tel.log_λ, flux_obs, var_obs, log_λ_obs, flux_star, vars_star, star_log_λ_tel)
+	else
+		flux_tel = spectra_interp(flux_obs, tfm.lih_o2t) ./
+			spectra_interp(repeat(tfm.star.lm.μ, 1, n_obs), tfm.lih_b2t)
+	end
 	tfm.tel.lm.μ[:] = make_template(flux_tel; min=μ_min, max=μ_max)
 	_, tfm.tel.lm.M[:, :], tfm.tel.lm.s[:, :], _ =
 	    fit_gen_pca(flux_tel; num_components=n_comp_tel, mu=tfm.tel.lm.μ)

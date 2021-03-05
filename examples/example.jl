@@ -46,7 +46,15 @@ tel_model_res = obs_resolution
 
 @time tf_model = tf.TFModel(log_λ_obs, log_λ_star, star_model_res, tel_model_res)
 
-@time rvs_notel, rvs_naive = tf.initialize!(tf_model, flux_obs)
+@time rvs_notel, rvs_naive = tf.initialize!(tf_model, flux_obs, var_obs, log_λ_obs, log_λ_star; use_gp=true)
+
+# plot(λ_nu, quiet; label="SOAP", xrange=(610, 670))
+# plot!(tfm.star.λ, tf_model.star.lm.μ[:]; label="template")
+#
+# plot(obs_λ, true_tels_mean; label="true tels")
+# plot!(tf_model.tel.λ, tf_model.tel.lm.μ[:]; label="template")
+# plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 1]; label="M 1")
+# plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 2]; label="M 2")
 
 tel_prior() = tf.model_prior(tf_model.tel.lm, [2, 1e3, 1e4, 1e4, 1e7])
 star_prior() = tf.model_prior(tf_model.star.lm, [2, 1e-1, 1e3, 1e6, 1e7])
