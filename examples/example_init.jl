@@ -4,7 +4,7 @@ Pkg.activate("examples")
 # Pkg.add("JLD2")
 # Pkg.add("UnitfulAstro")
 # Pkg.add("Unitful")
-# Pkg.add(;path="C:/Users/chris/Dropbox/GP_research/julia/telfitting")
+# Pkg.develop(;path="C:/Users/chris/Dropbox/GP_research/julia/telfitting")
 # Pkg.add("Stheno")
 # Pkg.add("TemporalGPs")
 # Pkg.add("Distributions")
@@ -15,8 +15,9 @@ using JLD2
 # using Stheno
 # using TemporalGPs
 # using UnitfulAstro, Unitful
-@time include("C:/Users/chris/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
-tf = Main.telfitting
+import telfitting
+# @time include("C:/Users/chris/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
+tf = telfitting
 
 ## Loading (pregenerated) data
 
