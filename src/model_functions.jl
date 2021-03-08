@@ -25,11 +25,11 @@ function create_λ_template(log_λ_obs, resolution)
 end
 
 struct LinearInterpolationHelper{T<:Number}
-    li::Matrix{Int}  # lower indices
-    ratios::Matrix{T}
+    li::AbstractMatrix{Int}  # lower indices
+    ratios::AbstractMatrix{T}
 	function LinearInterpolationHelper(
-		li::Matrix{Int},  # lower indices
-	    ratios::Matrix{T}) where {T<:Number}
+		li::AbstractMatrix{Int},  # lower indices
+	    ratios::AbstractMatrix{T}) where {T<:Number}
 		@assert size(li) == size(ratios)
 		@assert all(0 .<= ratios .<= 1)
 		# @assert some issorted thing?
@@ -37,7 +37,7 @@ struct LinearInterpolationHelper{T<:Number}
 	end
 end
 
-function LinearInterpolationHelper_maker(to_λs, from_λs::Matrix)
+function LinearInterpolationHelper_maker(to_λs::AbstractVecOrMat, from_λs::AbstractMatrix)
 	len_from, n_obs = size(from_λs)
 	len_to = size(to_λs, 1)
 
@@ -103,7 +103,6 @@ _eval_full_lm(M, s, μ) = _eval_lm(M, s) .+ μ
 (lm::FullLinearModel)() = _eval_full_lm(lm.M, lm.s, lm.μ)
 
 struct TFSubmodel{T<:Number}
-    len::Int
     log_λ::AbstractVector{T}
     λ::AbstractVector{T}
 	lm::LinearModel
@@ -115,11 +114,14 @@ struct TFSubmodel{T<:Number}
 		else
 			lm = BaseLinearModel(zeros(len, n_comp), zeros(n_comp, n_obs))
 		end
-        return TFSubmodel(len, log_λ, λ, lm)
+        return TFSubmodel(log_λ, λ, lm)
     end
-    function TFSubmodel(len, log_λ::AbstractVector{T}, λ, lm) where {T<:Number}
-        @assert len == length(log_λ) == length(λ) == size(lm.M, 1)
-        return new{T}(len, log_λ, λ, lm)
+	function TFSubmodel(tfsm, inds)
+		return TFSubmodel(tfsm.log_λ, tfsm.λ, typeof(tfsm.lm)(lm.M, lm.μ))
+	end
+    function TFSubmodel(log_λ::AbstractVector{T}, λ, lm) where {T<:Number}
+        @assert length(log_λ) == length(λ) == size(lm.M, 1)
+        return new{T}(log_λ, λ, lm)
     end
 end
 
@@ -167,6 +169,9 @@ struct TFModel{T<:Number}
         lih_t2b, lih_b2t = LinearInterpolationHelper_maker(tel.log_λ, star_log_λ_tel)
         return TFModel(tel, star, rv, [2, 1e3, 1e4, 1e4, 1e7], [2, 1e-1, 1e3, 1e6, 1e7], lih_t2b, lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t)
     end
+	function TFModel(tfm, inds)
+		return TFModel(TFSubmodel(tfm.tel, inds), TFSubmodel(tfm.star, inds), TFSubmodel(tfm.rv, inds), tfm.reg_tel, tfm.reg_star, tfm.lih_t2b, tfm.lih_b2t, tfm.lih_o2b, tfm.lih_b2o, tfm.lih_t2o, tfm.lih_o2t)
+	end
     function TFModel(tel::TFSubmodel{T}, star, rv, reg_tel, reg_star, lih_t2b,
 		lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t) where {T<:Number}
 		@assert length(reg_tel) == length(reg_star) == 5
@@ -177,7 +182,7 @@ end
 tel_prior(tfm) = model_prior(tfm.tel.lm, reg_tel)
 star_prior(tfm) = model_prior(tfm.star.lm, reg_star)
 
-spectra_interp(og_vals::Matrix, lih) =
+spectra_interp(og_vals::AbstractMatrix, lih) =
     (og_vals[lih.li] .* (1 .- lih.ratios)) + (og_vals[lih.li .+ 1] .* (lih.ratios))
 
 tel_model(tfm) = spectra_interp(tfm.tel.lm(), tfm.lih_t2o)
@@ -234,7 +239,7 @@ function _spectra_interp_gp!(fluxes, vars, log_λ, flux_obs, var_obs, log_λ_obs
 	end
 end
 
-function _spectra_interp_gp_div_gp!(fluxes::Matrix, vars::Matrix, log_λ::AbstractVector, flux_obs::Matrix, var_obs::Matrix, log_λ_obs::Matrix, flux_other::Matrix, var_other::Matrix, log_λ_other::Matrix; gp_mean::Number=1.)
+function _spectra_interp_gp_div_gp!(fluxes::AbstractMatrix, vars::AbstractMatrix, log_λ::AbstractVector, flux_obs::AbstractMatrix, var_obs::AbstractMatrix, log_λ_obs::AbstractMatrix, flux_other::AbstractMatrix, var_other::AbstractMatrix, log_λ_other::AbstractMatrix; gp_mean::Number=1.)
 	for i in 1:size(flux_obs, 2)
 		gpn = get_marginal_GP(SOAP_gp(log_λ_obs[:, i], var_obs[:, i]), flux_obs[:, i] .- gp_mean, log_λ)
 		gpd = get_marginal_GP(SOAP_gp(log_λ_other[:, i], var_other[:, i]), flux_other[:, i] .- gp_mean, log_λ)
