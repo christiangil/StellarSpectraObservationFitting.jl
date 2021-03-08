@@ -331,3 +331,20 @@ function model_prior(lm, coeffs::Vector{<:Real})
     (coeffs[4] * L1(lm.M)) +
     L1(lm.s)
 end
+
+_loss(tel::AbstractMatrix, star::AbstractMatrix, rv::AbstractMatrix, tfd::TFData) =
+    sum((((tel .* (star + rv)) - tfd.flux_obs) .^ 2) ./ tfd.var_obs)
+_loss_tel(star, rv, tfm::TFModel, tfd) =
+	_loss(tel_model(tfm), star, rv, tfd) + tel_prior(tfm)
+_loss_star(tel, rv, tfm::TFModel, tfd) = _
+	loss(tel, star_model(tfm), rv, tfd) + star_prior(tfm)
+_loss_rv(tel, star, tfm::TFModel, tfd) =
+	_loss(tel, star, rv_model(tfm), tfd)
+
+function loss_functions(tfm::TFModel, tfd::TFData)
+	loss() = _loss(tel_model(tfm), star_model(tfm), rv_model(tfm), tfd)
+	loss_tel() = _loss_tel(star_model(tfm), rv_model(tfm), tfd)
+	loss_star() = _loss_star(tel_model(tfm), rv_model(tfm), tfd)
+	loss_rv() = _loss_rv(tel_model(tfm), star_model(tfm), tfd)
+	return loss, loss_tel, loss_star, loss_rv
+end

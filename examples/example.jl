@@ -40,16 +40,6 @@ using Plots
 # plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 1]; label="M 1")
 # plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 2]; label="M 2")
 
-_loss(tel, star, rv, tfd) =
-    sum((((tel .* (star + rv)) - flux_obs) .^ 2) ./ var_obs)
-_loss_tel(star, rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), star, rv, flux_obs, var_obs) + tf.tel_prior(tf_model)
-_loss_star(tel, rv, flux_obs, var_obs) = _loss(tel, tf.star_model(tf_model), rv, flux_obs, var_obs) + tf.star_prior(tf_model)
-_loss_rv(tel, star, flux_obs, var_obs) = _loss(tel, star, tf.rv_model(tf_model), flux_obs, var_obs)
-loss() = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
-loss_tel() = _loss_tel(tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
-loss_star() = _loss_star(tf.tel_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
-loss_rv() = _loss_rv(tf.tel_model(tf_model), tf.star_model(tf_model), flux_obs, var_obs)
-
 using Flux, Zygote, Optim
 
 θ_tel = params(tf_model.tel.lm.M, tf_model.tel.lm.s, tf_model.tel.lm.μ)
