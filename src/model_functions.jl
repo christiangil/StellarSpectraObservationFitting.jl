@@ -5,7 +5,7 @@ struct TFData{T<:Real}
     var::AbstractMatrix{T}
     log_λ_obs::AbstractMatrix{T}
     log_λ_star::AbstractMatrix{T}
-	TFData(tfd, inds) =
+	TFData(tfd, inds::AbstractVecOrMat) =
 		TFData(view(tfd.flux, :, inds), view(tfd.var, :, inds), view(tfd.log_λ_obs, :, inds), view(tfd.log_λ_star, :, inds))
 	function TFData(flux::AbstractMatrix{T}, var, log_λ_obs, log_λ_star) where {T<:Real}
 		@assert size(flux) == size(var) == size(log_λ_obs) == size(log_λ_star)
@@ -79,10 +79,10 @@ abstract type LinearModel end
 
 # Full (includes mean) linear model
 struct FullLinearModel{T<:Number} <: LinearModel
-	M::Array{T}
-	s::Array{T}
+	M::AbstractMatrix{T}
+	s::AbstractMatrix{T}
 	μ::Vector{T}
-	function FullLinearModel(M::Array{T}, s, μ) where {T<:Number}
+	function FullLinearModel(M::AbstractMatrix{T}, s, μ) where {T<:Number}
 		@assert length(μ) == size(M, 1)
 		@assert size(M, 2) == size(s, 1)
 		return new{T}(M, s, μ)
@@ -90,17 +90,19 @@ struct FullLinearModel{T<:Number} <: LinearModel
 end
 # Base (no mean) linear model
 struct BaseLinearModel{T<:Number} <: LinearModel
-	M::Array{T}
-	s::Array{T}
-	function BaseLinearModel(M::Array{T}, s) where {T<:Number}
+	M::AbstractMatrix{T}
+	s::AbstractMatrix{T}
+	function BaseLinearModel(M::AbstractMatrix{T}, s) where {T<:Number}
 		@assert size(M, 2) == size(s, 1)
 		return new{T}(M, s)
 	end
 end
 _eval_lm(M, s) = M * s
 _eval_full_lm(M, s, μ) = _eval_lm(M, s) .+ μ
-(lm::BaseLinearModel)() = _eval_lm(lm.M, lm.s)
-(lm::FullLinearModel)() = _eval_full_lm(lm.M, lm.s, lm.μ)
+(flm::FullLinearModel)() = _eval_full_lm(flm.M, flm.s, flm.μ)
+(blm::BaseLinearModel)() = _eval_lm(blm.M, blm.s)
+(flm::FullLinearModel)(inds::AbstractVecOrMat) = FullLinearModel(flm.M, view(flm.s, :, inds), flm.μ)
+(blm::BaseLinearModel)(inds::AbstractVecOrMat) = BaseLinearModel(blm.M, view(blm.s, :, inds))
 
 struct TFSubmodel{T<:Number}
     log_λ::AbstractVector{T}
@@ -116,14 +118,13 @@ struct TFSubmodel{T<:Number}
 		end
         return TFSubmodel(log_λ, λ, lm)
     end
-	function TFSubmodel(tfsm, inds)
-		return TFSubmodel(tfsm.log_λ, tfsm.λ, typeof(tfsm.lm)(lm.M, lm.μ))
-	end
     function TFSubmodel(log_λ::AbstractVector{T}, λ, lm) where {T<:Number}
         @assert length(log_λ) == length(λ) == size(lm.M, 1)
         return new{T}(log_λ, λ, lm)
     end
 end
+(tfsm::TFSubmodel)(inds::AbstractVecOrMat) =
+	TFSubmodel(tfsm.log_λ, tfsm.λ, tfsm.lm(inds))
 
 function _shift_log_λ_model(log_λ_obs_from, log_λ_obs_to, log_λ_model_from)
 	n_obs = size(log_λ_obs_from, 2)
@@ -169,15 +170,14 @@ struct TFModel{T<:Number}
         lih_t2b, lih_b2t = LinearInterpolationHelper_maker(tel.log_λ, star_log_λ_tel)
         return TFModel(tel, star, rv, [2, 1e3, 1e4, 1e4, 1e7], [2, 1e-1, 1e3, 1e6, 1e7], lih_t2b, lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t)
     end
-	function TFModel(tfm, inds)
-		return TFModel(TFSubmodel(tfm.tel, inds), TFSubmodel(tfm.star, inds), TFSubmodel(tfm.rv, inds), tfm.reg_tel, tfm.reg_star, tfm.lih_t2b, tfm.lih_b2t, tfm.lih_o2b, tfm.lih_b2o, tfm.lih_t2o, tfm.lih_o2t)
-	end
     function TFModel(tel::TFSubmodel{T}, star, rv, reg_tel, reg_star, lih_t2b,
 		lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t) where {T<:Number}
 		@assert length(reg_tel) == length(reg_star) == 5
 		return new{T}(tel, star, rv, reg_tel, reg_star, lih_t2b, lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t)
 	end
 end
+(tfm::TFModel)(inds::AbstractVecOrMat) =
+	TFModel(tfm.tel(inds), tfm.star(inds), tfm.rv(inds), tfm.reg_tel, tfm.reg_star, tfm.lih_t2b, tfm.lih_b2t, tfm.lih_o2b, tfm.lih_b2o, tfm.lih_t2o, tfm.lih_o2t)
 
 tel_prior(tfm) = model_prior(tfm.tel.lm, reg_tel)
 star_prior(tfm) = model_prior(tfm.star.lm, reg_star)

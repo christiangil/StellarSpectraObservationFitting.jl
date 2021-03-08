@@ -3,10 +3,11 @@ using Pkg
 Pkg.activate("examples")
 Pkg.instantiate()
 
-using Plots
 using JLD2
-@time include("C:/Users/chris/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
-tf = Main.telfitting
+import telfitting
+# Pkg.status("telfitting")
+# @time include("C:/Users/chris/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
+tf = telfitting
 
 ## Loading (pregenerated) data
 
@@ -24,9 +25,13 @@ n_obs_train = Int(round(0.75 * n_obs))
 testing_inds = sort(sample(1:n_obs, n_obs-n_obs_train; replace=false))
 training_inds = [i for i in 1:n_obs if !(i in testing_inds)]
 
-tf_data_test = tf.TFData(tf_data, testing_inds)
 tf_data_train = tf.TFData(tf_data, training_inds)
+tf_data_test = tf.TFData(tf_data, testing_inds)
 
+tf_model_train = tf_model(training_inds)
+tf_model_test = tf_model(testing_inds)
+
+using Plots
 # plot(λ_nu, quiet; label="SOAP", xrange=(610, 670))
 # plot!(tfm.star.λ, tf_model.star.lm.μ[:]; label="template")
 #
@@ -35,7 +40,7 @@ tf_data_train = tf.TFData(tf_data, training_inds)
 # plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 1]; label="M 1")
 # plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 2]; label="M 2")
 
-_loss(tel, star, rv, flux_obs, var_obs) =
+_loss(tel, star, rv, tfd) =
     sum((((tel .* (star + rv)) - flux_obs) .^ 2) ./ var_obs)
 _loss_tel(star, rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), star, rv, flux_obs, var_obs) + tf.tel_prior(tf_model)
 _loss_star(tel, rv, flux_obs, var_obs) = _loss(tel, tf.star_model(tf_model), rv, flux_obs, var_obs) + tf.star_prior(tf_model)
