@@ -36,6 +36,21 @@ struct LinearInterpolationHelper{T<:Number}
 		return new{T}(li, ratios)
 	end
 end
+function (lih::LinearInterpolationHelper)(inds::AbstractVecOrMat, n_in::Int)
+	n_out, n_obs = size(lih.li)
+	@assert all(0 .< inds .<= n_obs)
+	@assert allunique(inds)
+	difference = 0
+	j = inds[1]-1
+	new_li = ones(Int, n_out, length(inds))
+	new_li[:, 1] = lih.li[:, inds[1]] .- (j * n_in)
+	for i in 2:length(inds)
+		j += (inds[i] - inds[i - 1]) - 1
+		new_li[:, i] = lih.li[:, inds[i]] .- (j * n_in)
+	end
+	return LinearInterpolationHelper(new_li, view(lih.ratios, :, inds))
+end
+
 
 function LinearInterpolationHelper_maker(to_λs::AbstractVecOrMat, from_λs::AbstractMatrix)
 	len_from, n_obs = size(from_λs)
@@ -177,7 +192,10 @@ struct TFModel{T<:Number}
 	end
 end
 (tfm::TFModel)(inds::AbstractVecOrMat) =
-	TFModel(tfm.tel(inds), tfm.star(inds), tfm.rv(inds), tfm.reg_tel, tfm.reg_star, tfm.lih_t2b, tfm.lih_b2t, tfm.lih_o2b, tfm.lih_b2o, tfm.lih_t2o, tfm.lih_o2t)
+	TFModel(tfm.tel(inds), tfm.star(inds), tfm.rv(inds), tfm.reg_tel, tfm.reg_star,
+	tfm.lih_t2b(inds, size(tfm.lih_o2t.li, 1)), tfm.lih_b2t(inds, size(tfm.lih_o2b.li, 1)),
+	tfm.lih_o2b(inds, size(tfm.lih_b2o.li, 1)), tfm.lih_b2o(inds, size(tfm.lih_o2b.li, 1)),
+	tfm.lih_t2o(inds, size(tfm.lih_o2t.li, 1)), tfm.lih_o2t(inds, size(tfm.lih_b2o.li, 1)))
 
 tel_prior(tfm) = model_prior(tfm.tel.lm, reg_tel)
 star_prior(tfm) = model_prior(tfm.star.lm, reg_star)
@@ -330,4 +348,15 @@ function model_prior(lm, coeffs::Vector{<:Real})
 	(coeffs[5] * L2(lm.M)) +
     (coeffs[4] * L1(lm.M)) +
     L1(lm.s)
+end
+
+struct TFModelOutput{T<:Real}
+	tel::AbstractMatrix{T}
+	star::AbstractMatrix{T}
+	rv::AbstractMatrix{T}
+	TFModelOutput(tfm::TFModel) = TFModelOutput(tel_model(tfm), star_model(tfm), rv_model(tfm))
+	function TFModelOutput(tel::AbstractMatrix{T}, star, rv) where {T<:Real}
+		@assert size(tel) == size(star) == size(rv)
+		new{T}(tel, star, rv)
+	end
 end
