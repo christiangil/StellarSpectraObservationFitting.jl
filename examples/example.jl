@@ -31,15 +31,9 @@ tf_data_test = tf.TFData(tf_data, testing_inds)
 tf_model_train = tf_model(training_inds)
 tf_model_test = tf_model(testing_inds)
 
-_loss(tel, star, rv, tfd) =
-    sum((((tel .* (star + rv)) - flux_obs) .^ 2) ./ var_obs)
-_loss_tel(star, rv, flux_obs, var_obs) = _loss(tf.tel_model(tf_model), star, rv, flux_obs, var_obs) + tf.tel_prior(tf_model)
-_loss_star(tel, rv, flux_obs, var_obs) = _loss(tel, tf.star_model(tf_model), rv, flux_obs, var_obs) + tf.star_prior(tf_model)
-_loss_rv(tel, star, flux_obs, var_obs) = _loss(tel, star, tf.rv_model(tf_model), flux_obs, var_obs)
-loss() = _loss(tf.tel_model(tf_model), tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
-loss_tel() = _loss_tel(tf.star_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
-loss_star() = _loss_star(tf.tel_model(tf_model), tf.rv_model(tf_model), flux_obs, var_obs)
-loss_rv() = _loss_rv(tf.tel_model(tf_model), tf.star_model(tf_model), flux_obs, var_obs)
+tf_output_train = tf.TFOutput(tf_model_train)
+
+loss, loss_tel, loss_star, loss_rv = tf.loss_funcs(tf_output_train, tf_model_train, tf_data_train)
 
 using Plots
 # plot(λ_nu, quiet; label="SOAP", xrange=(610, 670))
