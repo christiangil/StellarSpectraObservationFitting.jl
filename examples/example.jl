@@ -4,16 +4,13 @@ Pkg.activate("examples")
 Pkg.instantiate()
 
 using JLD2
+using Statistics
 import telfitting
 # Pkg.status("telfitting")
-# @time include("C:/Users/chris/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
+# @time include("src/telfitting.jl")
 tf = telfitting
 
-## Loading (pregenerated) data
-
-# include("data_structs.jl")
-# @load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" Spectra airmasses obs_resolution obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
-# @load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_150k.jld2" quiet λ_nu true_tels_mean
+plot_stuff=true
 
 ## Setting up necessary variables and functions
 
@@ -26,91 +23,64 @@ testing_inds = sort(sample(1:n_obs, n_obs-n_obs_train; replace=false))
 training_inds = [i for i in 1:n_obs if !(i in testing_inds)]
 
 tf_data_train = tf.TFData(tf_data, training_inds)
-tf_data_test = tf.TFData(tf_data, testing_inds)
-
+# tf_data_test = tf.TFData(tf_data, testing_inds)
 tf_model_train = tf_model(training_inds)
-tf_model_test = tf_model(testing_inds)
-
+# tf_model_test = tf_model(testing_inds)
 tf_output_train = tf.TFOutput(tf_model_train)
 
-loss, loss_tel, loss_star, loss_rv = tf.loss_funcs(tf_output_train, tf_model_train, tf_data_train)
+tf_workspace_train, loss = tf.TFOptimWorkspace(tf_model_train, tf_output_train, tf_data_train; return_loss_f=true)
 
 using Plots
-# plot(λ_nu, quiet; label="SOAP", xrange=(610, 670))
-# plot!(tfm.star.λ, tf_model.star.lm.μ[:]; label="template")
-#
-# plot(obs_λ, true_tels_mean; label="true tels")
-# plot!(tf_model.tel.λ, tf_model.tel.lm.μ[:]; label="template")
-# plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 1]; label="M 1")
-# plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 2]; label="M 2")
+if plot_stuff
+    @load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" airmasses obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
 
-using Flux, Zygote, Optim
+    plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (nm)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
+    plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
 
-θ_tel = params(tf_model.tel.lm.M, tf_model.tel.lm.s, tf_model.tel.lm.μ)
-θ_star = params(tf_model.star.lm.M, tf_model.star.lm.s, tf_model.star.lm.μ)
-θ_rv = params(tf_model.rv.lm.s)
-f_tel, g_tel, fg_tel!, p0_tel = tf.optfuns(loss_tel, θ_tel)
-f_star, g_star, fg_star!, p0_star = tf.optfuns(loss_star, θ_star)
-f_rv, g_rv, fg_rv!, p0_rv = tf.optfuns(loss_rv, θ_rv)
+    function status_plot(tfo::tf.TFOutput, tfd::tf.TFData; plot_epoch::Int=10, tracker::Int=0)
+        l = @layout [a; b]
+        # predict_plot = plot_spectrum(; legend = :bottomleft, size=(800,1200), layout = l)
+        # predict_plot = plot_spectrum(; xlim=(627.8,628.3), legend=:bottomleft, size=(800,1200), layout = l) # o2
+        # predict_plot = plot_spectrum(; xlim=(651.5,652), legend=:bottomleft, size=(800,1200), layout = l)  # h2o
+        predict_plot = plot_spectrum(; xlim = (647, 656), legend = :bottomleft, size=(800,1200), layout = l)  # h2o
+        plot!(predict_plot[1], obs_λ, true_tels[:, plot_epoch], label="true tel")
+        plot!(predict_plot[1], obs_λ, tfd.flux[:, plot_epoch] ./ (tfo.star[:, plot_epoch] + tfo.rv[:, plot_epoch]), label="predicted tel", alpha = 0.5)
+        plot!(predict_plot[1], obs_λ, tfo.tel[:, plot_epoch], label="model tel: $tracker", alpha = 0.5)
+        plot_star_λs = exp.(Spectra[plot_epoch].log_λ_bary)
+        plot!(predict_plot[2], plot_star_λs, tfd.flux[:, plot_epoch] ./ true_tels[:, plot_epoch], label="true star", )
+        plot!(predict_plot[2], plot_star_λs, tfd.flux[:, plot_epoch] ./ tfo.tel[:, plot_epoch], label="predicted star", alpha = 0.5)
+        plot!(predict_plot[2], plot_star_λs, tfo.star[:, plot_epoch] + tfo.rv[:, plot_epoch], label="model star: $tracker", alpha = 0.5)
+        display(predict_plot)
+    end
+    status_plot(tf_output_train, tf_data_train)
+end
 
-resid_stds = [std((rvs_notel - rvs_kep_nu) - rvs_activ_no_noise)]
+light_speed_nu = 299792458
+rvs_notel = (tf_model_train.rv.lm.s .* light_speed_nu)'
+rvs_std(rvs; inds=:) = std((rvs - rvs_kep_nu[inds]) - rvs_activ_no_noise[inds])
+resid_stds = [rvs_std(rvs_notel; inds=training_inds)]
 losses = [loss()]
 tracker = 0
-
-plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (nm)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
-plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
-function status_plot(; plot_epoch=1)
-    tel_model_result = tf.tel_model(tf_model)
-    star_model_result = tf.star_model(tf_model)
-    rv_model_result = tf.rv_model(tf_model)
-
-    l = @layout [a; b]
-    # predict_plot = plot_spectrum(; legend = :bottomleft, size=(800,1200), layout = l)
-    # predict_plot = plot_spectrum(; xlim=(627.8,628.3), legend=:bottomleft, size=(800,1200), layout = l) # o2
-    # predict_plot = plot_spectrum(; xlim=(651.5,652), legend=:bottomleft, size=(800,1200), layout = l)  # h2o
-    predict_plot = plot_spectrum(; xlim = (647, 656), legend = :bottomleft, size=(800,1200), layout = l)  # h2o
-    plot!(predict_plot[1], obs_λ, true_tels[:, plot_epoch], label="true tel")
-    plot!(predict_plot[1], obs_λ, flux_obs[:, plot_epoch] ./ (star_model_result[:, plot_epoch] + rv_model_result[:, plot_epoch]), label="predicted tel", alpha = 0.5)
-    plot!(predict_plot[1], obs_λ, tel_model_result[:, plot_epoch], label="model tel: $tracker", alpha = 0.5)
-    plot_star_λs = exp.(Spectra[plot_epoch].log_λ_bary)
-    plot!(predict_plot[2], plot_star_λs, flux_obs[:, plot_epoch] ./ true_tels[:, plot_epoch], label="true star", )
-    plot!(predict_plot[2], plot_star_λs, flux_obs[:, plot_epoch] ./ tel_model_result[:, plot_epoch], label="predicted star", alpha = 0.5)
-    plot!(predict_plot[2], plot_star_λs, star_model_result[:, plot_epoch] + rv_model_result[:, plot_epoch], label="model star: $tracker", alpha = 0.5)
-    display(predict_plot)
-end
-plot_epoch = 60
-status_plot(; plot_epoch=plot_epoch)
-
-OOptions = Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5)
-
-# Optim.optimize(Optim.only_fg!(fg_ts!), p0_ts, OOptions)
-# tf_model.rv.lm.M[:] = tf.calc_doppler_component_RVSKL(tf_model.star.λ, tf_model.star.lm.μ)
-# Optim.optimize(Optim.only_fg!(fg_rv!), p0_rv, OOptions)
-
-println("guess $tracker, std=$(round(std(rvs_notel - rvs_kep_nu - rvs_activ_no_noise), digits=5))")
+println("guess $tracker, std=$(round(rvs_std(rvs_notel; inds=training_inds), digits=5))")
 rvs_notel_opt = copy(rvs_notel)
-light_speed_nu = 299792458
+
+#this is doing nothing?
+tf.train_TFModel!(tf_workspace_train)
+
 @time for i in 1:4
 
-    # optimize star
-    tf.Flux_optimize!(fg_star!, p0_star, θ_star, OOptions)
+    tf.train_TFModel!(tf_Optim_workspace)
 
-    # optimize tellurics
-    tf.Flux_optimize!(fg_tel!, p0_tel, θ_tel, OOptions)
-
-    # optimize RVs
-    tf_model.rv.lm.M[:] = tf.calc_doppler_component_RVSKL(tf_model.star.λ, tf_model.star.lm.μ)
-    tf.Flux_optimize!(fg_rv!, p0_rv, θ_rv, OOptions)
     rvs_notel_opt[:] = (tf_model.rv.lm.s .* light_speed_nu)'
 
     append!(resid_stds, [std(rvs_notel_opt - rvs_kep_nu - rvs_activ_no_noise)])
     append!(losses, [loss()])
 
-    status_plot(; plot_epoch=plot_epoch)
+    status_plot(tf_output_train, tf_data_train)
     tracker += 1
     println("guess $tracker")
     println("loss   = $(losses[end])")
-    println("rv std = $(round(std((rvs_notel_opt - rvs_kep_nu) - rvs_activ_no_noise), digits=5))")
+    println("rv std = $(round(rvs_std(rvs_notel_opt; inds=training_inds), digits=5))")
 end
 
 plot(resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS", legend=false)

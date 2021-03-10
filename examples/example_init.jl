@@ -16,7 +16,7 @@ using JLD2
 # using TemporalGPs
 # using UnitfulAstro, Unitful
 import telfitting
-# @time include("C:/Users/chris/Dropbox/GP_research/julia/telfitting/src/telfitting.jl")
+# @time include("src/telfitting.jl")
 tf = telfitting
 
 ## Loading (pregenerated) data

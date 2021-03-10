@@ -360,18 +360,3 @@ struct TFOutput{T<:Real}
 		new{T}(tel, star, rv)
 	end
 end
-
-_loss(tel::AbstractMatrix, star::AbstractMatrix, rv::AbstractMatrix, tfd::TFData) =
-    sum((((tel .* (star + rv)) - tfd.flux) .^ 2) ./ tfd.var)
-loss(tfo::TFOutput, tfd) = _loss(tfo.tel, tfo.star, tfo.rv, tfd)
-loss(tfm::TFModel, tfd) = _loss(tel_model(tfm), star_model(tfm), rv_model(tf_model), tfd)
-loss_tel(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tel_model(tfm), tfo.star, tfo.rv, tfd) + tel_prior(tfm)
-loss_star(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tfo.tel, star_model(tfm), tfo.rv, tfd) + star_prior(tfm)
-loss_rv(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tfo.tel, tfo.star, rv_model(tfm), tfd)
-function loss_funcs(tfo::TFOutput, tfm::TFModel, tfd::TFData)
-    l() = loss(tfo, tfd)
-    l_tel() = loss_tel(tfo, tfm, tfd)
-    l_star() = loss_star(tfo, tfm, tfd)
-    l_rv() = loss_rv(tfo, tfm, tfd)
-    return l, l_tel, l_star, l_rv
-end
