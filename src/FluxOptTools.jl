@@ -152,7 +152,8 @@ struct TFOptimWorkspace
         return TFOptimWorkspace(tfm_smol, TFOutput(tfm_smol), tfd(inds); kwargs...)
     end
     function TFOptimWorkspace(tel, star, rv, tfm, tfo, tfd)
-        @assert length(tel.θ) == length(star.θ) == 3
+        @assert length(tel.θ) == length(star.θ)
+        @assert (length(tel.θ) == 1) || (length(tel.θ) == 3)
         @assert length(rv.θ) == 1
         new(tel, star, rv, tfm, tfo, tfd)
     end
