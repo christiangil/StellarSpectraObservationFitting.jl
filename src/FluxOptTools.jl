@@ -173,5 +173,5 @@ function train_TFModel!(tfow::TFOptimWorkspace; OOptions::Optim.Options=Optim.Op
 
     # optimize tellurics
     _Flux_optimize!(tfow.tel, OOptions)
-    tfow.tfo.star[:, :] = tel_model(tfow.tfm)
+    tfow.tfo.tel[:, :] = tel_model(tfow.tfm)
 end
