@@ -32,12 +32,13 @@ tf_workspace_train, loss = tf.TFOptimWorkspace(tf_model_train, tf_output_train, 
 
 using Plots
 if plot_stuff
-    @load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" airmasses obs_λ planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
+    @load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" airmasses planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
 
     plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (nm)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
     plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
 
     function status_plot(tfo::tf.TFOutput, tfd::tf.TFData; plot_epoch::Int=10, tracker::Int=0)
+        obs_λ = exp.(tfd.log_λ_obs[:, plot_epoch])
         l = @layout [a; b]
         # predict_plot = plot_spectrum(; legend = :bottomleft, size=(800,1200), layout = l)
         # predict_plot = plot_spectrum(; xlim=(627.8,628.3), legend=:bottomleft, size=(800,1200), layout = l) # o2
@@ -46,7 +47,7 @@ if plot_stuff
         plot!(predict_plot[1], obs_λ, true_tels[:, plot_epoch], label="true tel")
         plot!(predict_plot[1], obs_λ, tfd.flux[:, plot_epoch] ./ (tfo.star[:, plot_epoch] + tfo.rv[:, plot_epoch]), label="predicted tel", alpha = 0.5)
         plot!(predict_plot[1], obs_λ, tfo.tel[:, plot_epoch], label="model tel: $tracker", alpha = 0.5)
-        plot_star_λs = exp.(Spectra[plot_epoch].log_λ_bary)
+        plot_star_λs = exp.(tfd.log_λ_star[:, plot_epoch])
         plot!(predict_plot[2], plot_star_λs, tfd.flux[:, plot_epoch] ./ true_tels[:, plot_epoch], label="true star", )
         plot!(predict_plot[2], plot_star_λs, tfd.flux[:, plot_epoch] ./ tfo.tel[:, plot_epoch], label="predicted star", alpha = 0.5)
         plot!(predict_plot[2], plot_star_λs, tfo.star[:, plot_epoch] + tfo.rv[:, plot_epoch], label="model star: $tracker", alpha = 0.5)
@@ -64,16 +65,11 @@ tracker = 0
 println("guess $tracker, std=$(round(rvs_std(rvs_notel; inds=training_inds), digits=5))")
 rvs_notel_opt = copy(rvs_notel)
 
-#this is doing nothing?
-tf.train_TFModel!(tf_workspace_train)
+@time for i in 1:8
+    tf.train_TFModel!(tf_workspace_train)
+    rvs_notel_opt[:] = (tf_model_train.rv.lm.s .* light_speed_nu)'
 
-@time for i in 1:4
-
-    tf.train_TFModel!(tf_Optim_workspace)
-
-    rvs_notel_opt[:] = (tf_model.rv.lm.s .* light_speed_nu)'
-
-    append!(resid_stds, [std(rvs_notel_opt - rvs_kep_nu - rvs_activ_no_noise)])
+    append!(resid_stds, [rvs_std(rvs_notel_opt; inds=training_inds)])
     append!(losses, [loss()])
 
     status_plot(tf_output_train, tf_data_train)
@@ -83,8 +79,8 @@ tf.train_TFModel!(tf_workspace_train)
     println("rv std = $(round(rvs_std(rvs_notel_opt; inds=training_inds), digits=5))")
 end
 
-plot(resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS", legend=false)
-plot(losses; xlabel="iter", ylabel="loss", legend=false)
+plot(0:tracker, resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS", legend=false)
+plot(0:tracker, losses; xlabel="iter", ylabel="loss", legend=false)
 
 ## Plots
 
