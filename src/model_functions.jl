@@ -197,8 +197,8 @@ end
 	tfm.lih_o2b(inds, size(tfm.lih_b2o.li, 1)), tfm.lih_b2o(inds, size(tfm.lih_o2b.li, 1)),
 	tfm.lih_t2o(inds, size(tfm.lih_o2t.li, 1)), tfm.lih_o2t(inds, size(tfm.lih_b2o.li, 1)))
 
-tel_prior(tfm) = model_prior(tfm.tel.lm, reg_tel)
-star_prior(tfm) = model_prior(tfm.star.lm, reg_star)
+tel_prior(tfm::TFModel) = model_prior(tfm.tel.lm, tfm.reg_tel)
+star_prior(tfm::TFModel) = model_prior(tfm.star.lm, tfm.reg_star)
 
 spectra_interp(og_vals::AbstractMatrix, lih) =
     (og_vals[lih.li] .* (1 .- lih.ratios)) + (og_vals[lih.li .+ 1] .* (lih.ratios))
@@ -367,7 +367,7 @@ loss(tfo::TFOutput, tfd) = _loss(tfo.tel, tfo.star, tfo.rv, tfd)
 loss(tfm::TFModel, tfd) = _loss(tel_model(tfm), star_model(tfm), rv_model(tf_model), tfd)
 loss_tel(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tel_model(tfm), tfo.star, tfo.rv, tfd) + tel_prior(tfm)
 loss_star(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tfo.tel, star_model(tfm), tfo.rv, tfd) + star_prior(tfm)
-loss_rv(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tfo.tel, tfo.star, rv_model(tf_model), tfd)
+loss_rv(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tfo.tel, tfo.star, rv_model(tfm), tfd)
 function loss_funcs(tfo::TFOutput, tfm::TFModel, tfd::TFData)
     l() = loss(tfo, tfd)
     l_tel() = loss_tel(tfo, tfm, tfd)
