@@ -109,7 +109,7 @@ struct TFOptimSubWorkspace
     θ::Flux.Params
     fg!::Function
     p0::Vector
-    function TFOptimSubWorkspace(tfsm::TFSubmodel, loss::Function; only_s::Bool=false)
+    function TFOptimSubWorkspace(tfsm::TFSubmodel, loss::Function, only_s::Bool)
         if only_s
             θ = Flux.params(tfsm.lm.s)
         else
@@ -135,11 +135,11 @@ struct TFOptimWorkspace
     tfm::TFModel
     tfo::TFOutput
     tfd::TFData
-    function TFOptimWorkspace(tfm::TFModel, tfo::TFOutput, tfd::TFData; return_loss_f::Bool=false)
+    function TFOptimWorkspace(tfm::TFModel, tfo::TFOutput, tfd::TFData; return_loss_f::Bool=false, only_s::Bool=false)
         loss, loss_tel, loss_star, loss_rv = loss_funcs(tfo, tfm, tfd)
-        tel = TFOptimSubWorkspace(tfm.tel, loss_tel; only_s=false)
-        star = TFOptimSubWorkspace(tfm.star, loss_star; only_s=false)
-        rv = TFOptimSubWorkspace(tfm.rv, loss_rv; only_s=true)
+        tel = TFOptimSubWorkspace(tfm.tel, loss_tel, only_s)
+        star = TFOptimSubWorkspace(tfm.star, loss_star, only_s)
+        rv = TFOptimSubWorkspace(tfm.rv, loss_rv, true)
         tfow = TFOptimWorkspace(tel, star, rv, tfm, tfo, tfd)
         if return_loss_f
             return tfow, loss
@@ -147,6 +147,8 @@ struct TFOptimWorkspace
             return tfow
         end
     end
+    TFOptimWorkspace(tfm::TFModel, tfd::TFData, inds::AbstractVecOrMat; kwargs...) =
+        TFOptimWorkspace(tfm(inds), TFOutput(tfm_smol), tfd(inds); kwargs...)
     function TFOptimWorkspace(tel, star, rv, tfm, tfo, tfd)
         @assert length(tel.θ) == length(star.θ) == 3
         @assert length(rv.θ) == 1
