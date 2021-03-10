@@ -147,8 +147,10 @@ struct TFOptimWorkspace
             return tfow
         end
     end
-    TFOptimWorkspace(tfm::TFModel, tfd::TFData, inds::AbstractVecOrMat; kwargs...) =
-        TFOptimWorkspace(tfm(inds), TFOutput(tfm_smol), tfd(inds); kwargs...)
+    function TFOptimWorkspace(tfm::TFModel, tfd::TFData, inds::AbstractVecOrMat; kwargs...)
+        tfm_smol = tfm(inds)
+        return TFOptimWorkspace(tfm_smol, TFOutput(tfm_smol), tfd(inds); kwargs...)
+    end
     function TFOptimWorkspace(tel, star, rv, tfm, tfo, tfd)
         @assert length(tel.θ) == length(star.θ) == 3
         @assert length(rv.θ) == 1
