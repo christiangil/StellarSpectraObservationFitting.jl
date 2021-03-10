@@ -49,4 +49,4 @@ tel_model_res = sqrt(2) * obs_resolution
 
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, tf_data; use_gp=true)
 
-@save "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k" tf_model n_obs len_obs tf_data star_model_res tel_model_res
+@save "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k" tf_model n_obs tf_data

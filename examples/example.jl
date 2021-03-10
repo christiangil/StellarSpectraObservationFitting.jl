@@ -14,7 +14,7 @@ plot_stuff=true
 
 ## Setting up necessary variables and functions
 
-@load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k" tf_model n_obs len_obs tf_data star_model_res tel_model_res
+@load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k" tf_model n_obs tf_data
 
 using StatsBase
 
@@ -22,7 +22,7 @@ n_obs_train = Int(round(0.75 * n_obs))
 testing_inds = sort(sample(1:n_obs, n_obs-n_obs_train; replace=false))
 training_inds = [i for i in 1:n_obs if !(i in testing_inds)]
 
-tf_data_train = tf.TFData(tf_data, training_inds)
+tf_data_train = tf_data(training_inds)
 # tf_data_test = tf.TFData(tf_data, testing_inds)
 tf_model_train = tf_model(training_inds)
 # tf_model_test = tf_model(testing_inds)
