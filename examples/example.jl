@@ -14,7 +14,7 @@ plot_stuff=true
 
 ## Setting up necessary variables and functions
 
-@load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k" tf_model n_obs tf_data
+@load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k.jld2" tf_model n_obs tf_data
 
 using StatsBase
 
