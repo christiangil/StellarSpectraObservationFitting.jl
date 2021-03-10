@@ -92,7 +92,7 @@ end
 _loss(tel::AbstractMatrix, star::AbstractMatrix, rv::AbstractMatrix, tfd::TFData) =
     sum((((tel .* (star + rv)) - tfd.flux) .^ 2) ./ tfd.var)
 loss(tfo::TFOutput, tfd) = _loss(tfo.tel, tfo.star, tfo.rv, tfd)
-loss(tfm::TFModel, tfd) = _loss(tel_model(tfm), star_model(tfm), rv_model(tf_model), tfd)
+loss(tfm::TFModel, tfd) = _loss(tel_model(tfm), star_model(tfm), rv_model(tfm), tfd)
 loss_tel(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tel_model(tfm), tfo.star, tfo.rv, tfd) + tel_prior(tfm)
 loss_star(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tfo.tel, star_model(tfm), tfo.rv, tfd) + star_prior(tfm)
 loss_rv(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tfo.tel, tfo.star, rv_model(tfm), tfd)
@@ -164,11 +164,14 @@ _Flux_optimize!(tfosw::TFOptimSubWorkspace, OOptions) =
 function train_TFModel!(tfow::TFOptimWorkspace; OOptions::Optim.Options=Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5))
     # optimize star
     _Flux_optimize!(tfow.star, OOptions)
+    tfow.tfo.star[:, :] = star_model(tfow.tfm)
 
     # optimize RVs
     tfow.tfm.rv.lm.M[:] = calc_doppler_component_RVSKL(tfow.tfm.star.λ, tfow.tfm.star.lm.μ)
     _Flux_optimize!(tfow.rv, OOptions)
+    tfow.tfo.rv[:, :] = rv_model(tfow.tfm)
 
     # optimize tellurics
     _Flux_optimize!(tfow.tel, OOptions)
+    tfow.tfo.star[:, :] = tel_model(tfow.tfm)
 end
