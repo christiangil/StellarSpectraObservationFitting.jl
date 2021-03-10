@@ -5,13 +5,14 @@ struct TFData{T<:Real}
     var::AbstractMatrix{T}
     log_λ_obs::AbstractMatrix{T}
     log_λ_star::AbstractMatrix{T}
-	TFData(tfd, inds::AbstractVecOrMat) =
-		TFData(view(tfd.flux, :, inds), view(tfd.var, :, inds), view(tfd.log_λ_obs, :, inds), view(tfd.log_λ_star, :, inds))
 	function TFData(flux::AbstractMatrix{T}, var, log_λ_obs, log_λ_star) where {T<:Real}
 		@assert size(flux) == size(var) == size(log_λ_obs) == size(log_λ_star)
 		return new{T}(flux, var, log_λ_obs, log_λ_star)
 	end
 end
+(tfd::TFData)(inds::AbstractVecOrMat) =
+	TFData(view(tfd.flux, :, inds), view(tfd.var, :, inds),
+	view(tfd.log_λ_obs, :, inds), view(tfd.log_λ_star, :, inds))
 
 
 function create_λ_template(log_λ_obs, resolution)
@@ -183,7 +184,7 @@ struct TFModel{T<:Number}
             star_log_λ_tel[:, i] = star.log_λ .+ star_dop[i]
         end
         lih_t2b, lih_b2t = LinearInterpolationHelper_maker(tel.log_λ, star_log_λ_tel)
-        return TFModel(tel, star, rv, [2, 1e3, 1e4, 1e4, 1e7], [2, 1e-1, 1e3, 1e6, 1e7], lih_t2b, lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t)
+        return TFModel(tel, star, rv, [1e4, 1e3, 2, 1e7, 1e4], [1e3, 1e-1, 2, 1e7, 1e6], lih_t2b, lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t)
     end
     function TFModel(tel::TFSubmodel{T}, star, rv, reg_tel, reg_star, lih_t2b,
 		lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t) where {T<:Number}
@@ -343,10 +344,10 @@ L2(thing) = sum(thing .* thing)
 
 function model_prior(lm, coeffs::Vector{<:Real})
     μ_mod = lm.μ .- 1
-    return (coeffs[3] * L2(μ_mod)) +
-	(coeffs[2] * (L1(μ_mod) + (coeffs[1] * sum(μ_mod[μ_mod.>0])))) +
-	(coeffs[5] * L2(lm.M)) +
-    (coeffs[4] * L1(lm.M)) +
+    return (coeffs[1] * L2(μ_mod)) +
+	(coeffs[2] * (L1(μ_mod) + (coeffs[3] * sum(μ_mod[μ_mod .> 0])))) +
+	(coeffs[4] * L2(lm.M)) +
+    (coeffs[5] * L1(lm.M)) +
     L1(lm.s)
 end
 
