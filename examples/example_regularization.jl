@@ -31,8 +31,10 @@ end
 function fit_regularization_helper!(regs::Vector, reg_ind::Int, train::tf.TFOptimWorkspace, test::tf.TFOptimWorkspace, loss_test::Function; test_factor::Real=10)
     ℓs = zeros(2)
     reg_hold = [1, test_factor] .* regs[reg_ind]
+    println("initial regularization eval")
     ℓs[1] = eval_regularization(train, test, loss_test)
     regs[reg_ind] = reg_hold[2]
+    println("$(test_factor)x regularization eval")
     ℓs[2] = eval_regularization(train, test, loss_test)
     # need to try decreasing regularization
     if (ℓs[2] > ℓs[1]) && (1e-6 < reg_hold[1] < 1e12)
