@@ -19,10 +19,10 @@ n_obs_train = Int(round(0.75 * n_obs))
 training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
 
 function eval_regularization(train::tf.TFOptimWorkspace, test::tf.TFOptimWorkspace, loss_test::Function)
-    for i in 1:8
+    for i in 1:10
         tf.train_TFModel!(train)
     end
-    for i in 1:3
+    for i in 1:5
         tf.train_TFModel!(test)
     end
     return loss_test()
@@ -37,8 +37,8 @@ function fit_regularization_helper!(regs::Vector, reg_ind::Int, train::tf.TFOpti
     println("$(test_factor)x regularization eval")
     ℓs[2] = eval_regularization(train, test, loss_test)
     # need to try decreasing regularization
-    if (ℓs[2] > ℓs[1]) && (1e-6 < reg_hold[1] < 1e12)
-        while ℓs[2] > ℓs[1]
+    if ℓs[2] > ℓs[1]
+        while (ℓs[2] > ℓs[1]) && (1e-6 < reg_hold[1] < 1e12)
             println("trying a lower regularization")
             ℓs[2] = ℓs[1]
             reg_hold ./= test_factor
@@ -65,8 +65,8 @@ function fit_regularization!(tfm::tf.TFModel, tfd::tf.TFData, training_inds::Abs
     tf_workspace_train = tf.TFOptimWorkspace(tfm, tfd, training_inds)
     tf_workspace_test, loss_test = tf.TFOptimWorkspace(tfm, tfd, testing_inds; return_loss_f=true, only_s=true)
     println("starting regularization searches")
-    for i in 1:1
-    # for i in 1:length(tfm.reg_tel)
+    # for i in 3
+    for i in 1:length(tfm.reg_tel)
         if i != 3
             test_factor=10
         else
