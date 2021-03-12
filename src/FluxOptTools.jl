@@ -95,13 +95,15 @@ loss(tfo::TFOutput, tfd) = _loss(tfo.tel, tfo.star, tfo.rv, tfd)
 loss(tfm::TFModel, tfd) = _loss(tel_model(tfm), star_model(tfm), rv_model(tfm), tfd)
 loss_tel(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tel_model(tfm), tfo.star, tfo.rv, tfd) + tel_prior(tfm)
 loss_star(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tfo.tel, star_model(tfm), tfo.rv, tfd) + star_prior(tfm)
+loss_telstar(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tel_model(tfm), star_model(tfm), tfo.rv, tfd) + star_prior(tfm) + tel_prior(tfm)
 loss_rv(tfo::TFOutput, tfm::TFModel, tfd) = _loss(tfo.tel, tfo.star, rv_model(tfm), tfd)
 function loss_funcs(tfo::TFOutput, tfm::TFModel, tfd::TFData)
     l() = loss(tfo, tfd)
     l_tel() = loss_tel(tfo, tfm, tfd)
     l_star() = loss_star(tfo, tfm, tfd)
+    loss_telstar() = loss_telstar(tfo, tfm, tfd)
     l_rv() = loss_rv(tfo, tfm, tfd)
-    return l, l_tel, l_star, l_rv
+    return l, l_tel, l_star, l_telstar, l_rv
 end
 
 
@@ -109,14 +111,25 @@ struct TFOptimSubWorkspace
     θ::Flux.Params
     fg!::Function
     p0::Vector
+    function TFOptimSubWorkspace(θ::Flux.Params, loss::Function)
+        _, _, fg!, p0 = optfuns(loss, θ)
+        return TFOptimSubWorkspace(θ, fg!, p0)
+    end
     function TFOptimSubWorkspace(tfsm::TFSubmodel, loss::Function, only_s::Bool)
         if only_s
             θ = Flux.params(tfsm.lm.s)
         else
             θ = Flux.params(tfsm.lm.M, tfsm.lm.s, tfsm.lm.μ)
         end
-        _, _, fg!, p0 = optfuns(loss, θ)
-        return TFOptimSubWorkspace(θ, fg!, p0)
+        return TFOptimSubWorkspace(θ, loss])
+    end
+    function TFOptimSubWorkspace(tfsm1::TFSubmodel, tfsm2::TFSubmodel, loss::Function, only_s::Bool)
+        if only_s
+            θ = Flux.params(tfsm1.lm.s, tfsm2.lm.s)
+        else
+            θ = Flux.params(tfsm1.lm.M, tfsm1.lm.s, tfsm1.lm.μ, tfsm2.lm.M, tfsm2.lm.s, tfsm2.lm.μ)
+        end
+        return TFOptimSubWorkspace(θ, loss)
     end
     function TFOptimSubWorkspace(θ, fg!, p0)
         len = 0
@@ -128,34 +141,64 @@ struct TFOptimSubWorkspace
     end
 end
 
-struct TFOptimWorkspace
+abstract type TFOptimWorkspace
+
+struct TFWorkspace <: TFOptimWorkspace
     tel::TFOptimSubWorkspace
     star::TFOptimSubWorkspace
     rv::TFOptimSubWorkspace
     tfm::TFModel
     tfo::TFOutput
     tfd::TFData
-    function TFOptimWorkspace(tfm::TFModel, tfo::TFOutput, tfd::TFData; return_loss_f::Bool=false, only_s::Bool=false)
-        loss, loss_tel, loss_star, loss_rv = loss_funcs(tfo, tfm, tfd)
+    function TFWorkspace(tfm::TFModel, tfo::TFOutput, tfd::TFData; return_loss_f::Bool=false, only_s::Bool=false)
+        loss, loss_tel, loss_star, _, loss_rv = loss_funcs(tfo, tfm, tfd)
         tel = TFOptimSubWorkspace(tfm.tel, loss_tel, only_s)
         star = TFOptimSubWorkspace(tfm.star, loss_star, only_s)
         rv = TFOptimSubWorkspace(tfm.rv, loss_rv, true)
-        tfow = TFOptimWorkspace(tel, star, rv, tfm, tfo, tfd)
+        tfow = TFWorkspace(tel, star, rv, tfm, tfo, tfd)
         if return_loss_f
             return tfow, loss
         else
             return tfow
         end
     end
-    function TFOptimWorkspace(tfm::TFModel, tfd::TFData, inds::AbstractVecOrMat; kwargs...)
+    function TFWorkspace(tfm::TFModel, tfd::TFData, inds::AbstractVecOrMat; kwargs...)
         tfm_smol = tfm(inds)
-        return TFOptimWorkspace(tfm_smol, TFOutput(tfm_smol), tfd(inds); kwargs...)
+        return TFWorkspace(tfm_smol, TFOutput(tfm_smol), tfd(inds); kwargs...)
     end
-    function TFOptimWorkspace(tel, star, rv, tfm, tfo, tfd)
+    function TFWorkspace(tel, star, rv, tfm, tfo, tfd)
         @assert length(tel.θ) == length(star.θ)
         @assert (length(tel.θ) == 1) || (length(tel.θ) == 3)
         @assert length(rv.θ) == 1
         new(tel, star, rv, tfm, tfo, tfd)
+    end
+end
+
+struct TFWorkspaceTelStar <: TFOptimWorkspace
+    telstar::TFOptimSubWorkspace
+    rv::TFOptimSubWorkspace
+    tfm::TFModel
+    tfo::TFOutput
+    tfd::TFData
+    function TFWorkspaceTelStar(tfm::TFModel, tfo::TFOutput, tfd::TFData; return_loss_f::Bool=false, only_s::Bool=false)
+        loss, _, _, loss_telstar, loss_rv = loss_funcs(tfo, tfm, tfd)
+        telstar = TFOptimSubWorkspace(tfm.tel, tfm.star, loss_telstar, only_s)
+        rv = TFOptimSubWorkspace(tfm.rv, loss_rv, true)
+        tfow = TFWorkspaceTelStar(telstar, rv, tfm, tfo, tfd)
+        if return_loss_f
+            return tfow, loss
+        else
+            return tfow
+        end
+    end
+    function TFWorkspaceTelStar(tfm::TFModel, tfd::TFData, inds::AbstractVecOrMat; kwargs...)
+        tfm_smol = tfm(inds)
+        return TFWorkspaceTelStar(tfm_smol, TFOutput(tfm_smol), tfd(inds); kwargs...)
+    end
+    function TFWorkspaceTelStar(telstar, rv, tfm, tfo, tfd)
+        @assert (length(telstar.θ) == 2) || (length(telstar.θ) == 6)
+        @assert length(rv.θ) == 1
+        new(telstar, rv, tfm, tfo, tfd)
     end
 end
 
@@ -166,7 +209,7 @@ end
 _Flux_optimize!(tfosw::TFOptimSubWorkspace, OOptions) =
     _Flux_optimize!(tfosw.fg!, tfosw.p0, tfosw.θ, OOptions)
 
-function train_TFModel!(tfow::TFOptimWorkspace; OOptions::Optim.Options=Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5))
+function train_TFModel!(tfow::TFWorkspace; OOptions::Optim.Options=Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5))
     # optimize star
     _Flux_optimize!(tfow.star, OOptions)
     tfow.tfo.star[:, :] = star_model(tfow.tfm)
@@ -179,4 +222,16 @@ function train_TFModel!(tfow::TFOptimWorkspace; OOptions::Optim.Options=Optim.Op
     # optimize tellurics
     _Flux_optimize!(tfow.tel, OOptions)
     tfow.tfo.tel[:, :] = tel_model(tfow.tfm)
+end
+
+function train_TFModel!(tfow::TFWorkspaceTelStar; OOptions::Optim.Options=Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5))
+    # optimize tellurics and star
+    _Flux_optimize!(tfow.telstar, OOptions)
+    tfow.tfo.star[:, :] = star_model(tfow.tfm)
+    tfow.tfo.tel[:, :] = tel_model(tfow.tfm)
+
+    # optimize RVs
+    tfow.tfm.rv.lm.M[:] = calc_doppler_component_RVSKL(tfow.tfm.star.λ, tfow.tfm.star.lm.μ)
+    _Flux_optimize!(tfow.rv, OOptions)
+    tfow.tfo.rv[:, :] = rv_model(tfow.tfm)
 end
