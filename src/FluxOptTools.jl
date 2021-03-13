@@ -59,7 +59,7 @@ function copyto!(pars::Flux.Params, v::AbstractArray)
 end
 
 
-function optfuns(loss, pars::Union{Flux.Params, Zygote.Params})
+function optfuns(loss, pars::Union{Flux.Params, Zygote.Params}; return_OD::Bool=true)
     grads = Zygote.gradient(loss, pars)
     p0 = copyto!(zeros(pars), pars)
     g! = function (G,w)
@@ -83,7 +83,11 @@ function optfuns(loss, pars::Union{Flux.Params, Zygote.Params})
             return loss()
         end
     end
-    f, g!, fg!, p0
+    if return_OD
+        return f, g!, fg!, p0, OnceDifferentiable(f, g!, fg!, p0)
+    else
+        return f, g!, fg!, p0
+    end
 end
 
 
@@ -109,11 +113,11 @@ end
 
 struct TFOptimSubWorkspace
     θ::Flux.Params
-    fg!::Function
+    obj::OnceDifferentiable
     p0::Vector
     function TFOptimSubWorkspace(θ::Flux.Params, loss::Function)
-        _, _, fg!, p0 = optfuns(loss, θ)
-        return TFOptimSubWorkspace(θ, fg!, p0)
+        _, _, _, p0, obj = optfuns(loss, θ)
+        return TFOptimSubWorkspace(θ, obj, p0)
     end
     function TFOptimSubWorkspace(tfsm::TFSubmodel, loss::Function, only_s::Bool)
         if only_s
@@ -121,7 +125,7 @@ struct TFOptimSubWorkspace
         else
             θ = Flux.params(tfsm.lm.M, tfsm.lm.s, tfsm.lm.μ)
         end
-        return TFOptimSubWorkspace(θ, loss])
+        return TFOptimSubWorkspace(θ, loss)
     end
     function TFOptimSubWorkspace(tfsm1::TFSubmodel, tfsm2::TFSubmodel, loss::Function, only_s::Bool)
         if only_s
@@ -131,13 +135,13 @@ struct TFOptimSubWorkspace
         end
         return TFOptimSubWorkspace(θ, loss)
     end
-    function TFOptimSubWorkspace(θ, fg!, p0)
+    function TFOptimSubWorkspace(θ, obj, p0)
         len = 0
         for i in 1:length(θ)
             len += length(θ[i])
         end
         @assert len == length(p0)
-        new(θ, fg!, p0)
+        new(θ, obj, p0)
     end
 end
 
@@ -202,12 +206,12 @@ struct TFWorkspaceTelStar <: TFOptimWorkspace
     end
 end
 
-function _Flux_optimize!(fg!::Function, p0::Vector, θ::Flux.Params, OOptions::Optim.Options)
-    Optim.optimize(Optim.only_fg!(fg!), p0, OOptions)
+function _Flux_optimize!(obj::OnceDifferentiable, p0::Vector, θ::Flux.Params, OOptions::Optim.Options)
+    Optim.optimize(obj, p0, LBFGS(); OOptions)
     copyto!(p0, θ)
 end
 _Flux_optimize!(tfosw::TFOptimSubWorkspace, OOptions) =
-    _Flux_optimize!(tfosw.fg!, tfosw.p0, tfosw.θ, OOptions)
+    _Flux_optimize!(tfosw.obj, tfosw.p0, tfosw.θ, OOptions)
 
 function train_TFModel!(tfow::TFWorkspace; OOptions::Optim.Options=Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5))
     # optimize star
