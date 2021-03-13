@@ -62,12 +62,12 @@ end
 function optfuns(loss, pars::Union{Flux.Params, Zygote.Params})
     grads = Zygote.gradient(loss, pars)
     p0 = copyto!(zeros(pars), pars)
-    gradfun = function (g,w)
+    g! = function (G,w)
         copyto!(pars, w)
         grads = Zygote.gradient(loss, pars)
-        copyto!(g, grads)
+        copyto!(G, grads)
     end
-    lossfun = function (w)
+    f = function (w)
         copyto!(pars, w)
         loss()
     end
@@ -83,7 +83,7 @@ function optfuns(loss, pars::Union{Flux.Params, Zygote.Params})
             return loss()
         end
     end
-    lossfun, gradfun, fg!, p0
+    f, g!, fg!, p0
 end
 
 
