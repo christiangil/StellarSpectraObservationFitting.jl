@@ -59,32 +59,35 @@ function copyto!(pars::Flux.Params, v::AbstractArray)
 end
 
 
-function optfuns(loss, pars::Union{Flux.Params, Zygote.Params}; return_OD::Bool=true)
-    grads = Zygote.gradient(loss, pars)
+function opt_funcs(loss, pars::Union{Flux.Params, Zygote.Params}; return_OD::Bool=true)
     p0 = copyto!(zeros(pars), pars)
-    g! = function (G,w)
+    function g!(G, w)
         copyto!(pars, w)
-        grads = Zygote.gradient(loss, pars)
-        copyto!(G, grads)
+        copyto!(G, Zygote.gradient(loss, pars))
     end
-    f = function (w)
+    function f(w)
         copyto!(pars, w)
-        loss()
+        return loss()
     end
-    fg! = function (F,G,w)
+    function fg!(F, G, w)
         copyto!(pars, w)
         if G != nothing
             l, back = Zygote.pullback(loss, pars)
-            grads = back(1)
-            copyto!(G, grads)
+            copyto!(G, back(1))
             return l
         end
         if F != nothing
             return loss()
         end
     end
+    function fg_obj!(G, w)
+        copyto!(pars, w)
+        l, back = Zygote.pullback(loss, pars)
+        copyto!(G, back(1))
+        return l
+    end
     if return_OD
-        return f, g!, fg!, p0, OnceDifferentiable(f, g!, fg!, p0)
+        return f, g!, fg!, p0, OnceDifferentiable(f, g!, fg_obj!, p0)
     else
         return f, g!, fg!, p0
     end
@@ -105,7 +108,7 @@ function loss_funcs(tfo::TFOutput, tfm::TFModel, tfd::TFData)
     l() = loss(tfo, tfd)
     l_tel() = loss_tel(tfo, tfm, tfd)
     l_star() = loss_star(tfo, tfm, tfd)
-    loss_telstar() = loss_telstar(tfo, tfm, tfd)
+    l_telstar() = loss_telstar(tfo, tfm, tfd)
     l_rv() = loss_rv(tfo, tfm, tfd)
     return l, l_tel, l_star, l_telstar, l_rv
 end
@@ -118,7 +121,7 @@ struct TFOptimSubWorkspace
     optstate::Optim.AbstractOptimizerState
     p0::Vector
     function TFOptimSubWorkspace(θ::Flux.Params, loss::Function)
-        _, _, _, p0, obj = optfuns(loss, θ)
+        _, _, _, p0, obj = opt_funcs(loss, θ)
         opt = LBFGS()
         # initial_state(method::LBFGS, ...) doesn't use the options for anything
         return TFOptimSubWorkspace(θ, obj, opt, Optim.initial_state(opt, Optim.Options(), obj, p0), p0)
