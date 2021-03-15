@@ -114,10 +114,14 @@ end
 struct TFOptimSubWorkspace
     θ::Flux.Params
     obj::OnceDifferentiable
+    opt::Optim.FirstOrderOptimizer
+    optstate::Optim.AbstractOptimizerState
     p0::Vector
     function TFOptimSubWorkspace(θ::Flux.Params, loss::Function)
         _, _, _, p0, obj = optfuns(loss, θ)
-        return TFOptimSubWorkspace(θ, obj, p0)
+        opt = LBFGS()
+        # initial_state(method::LBFGS, ...) doesn't use the options for anything
+        return TFOptimSubWorkspace(θ, obj, opt, Optim.initial_state(opt, Optim.Options(), obj, p0), p0)
     end
     function TFOptimSubWorkspace(tfsm::TFSubmodel, loss::Function, only_s::Bool)
         if only_s
@@ -135,13 +139,13 @@ struct TFOptimSubWorkspace
         end
         return TFOptimSubWorkspace(θ, loss)
     end
-    function TFOptimSubWorkspace(θ, obj, p0)
+    function TFOptimSubWorkspace(θ, obj, opt, optstate, p0)
         len = 0
         for i in 1:length(θ)
             len += length(θ[i])
         end
         @assert len == length(p0)
-        new(θ, obj, p0)
+        new(θ, obj, opt, optstate, p0)
     end
 end
 
@@ -206,36 +210,40 @@ struct TFWorkspaceTelStar <: TFOptimWorkspace
     end
 end
 
-function _Flux_optimize!(obj::OnceDifferentiable, p0::Vector, θ::Flux.Params, OOptions::Optim.Options)
-    Optim.optimize(obj, p0, LBFGS(); OOptions)
+function _Flux_optimize!(θ::Flux.Params, obj::OnceDifferentiable, p0::Vector,
+    opt::Optim.FirstOrderOptimizer, optstate::Optim.AbstractOptimizerState,
+    options::Optim.Options)
+
+    # Optim.optimize(obj, p0, LBFGS(); options)
+    Optim.optimize(obj, p0, opt, options, optstate)
     copyto!(p0, θ)
 end
-_Flux_optimize!(tfosw::TFOptimSubWorkspace, OOptions) =
-    _Flux_optimize!(tfosw.obj, tfosw.p0, tfosw.θ, OOptions)
+_Flux_optimize!(tfosw::TFOptimSubWorkspace, options) =
+    _Flux_optimize!(tfosw.θ, tfosw.obj, tfosw.p0, tfosw.opt, tfosw.optstate, options)
 
-function train_TFModel!(tfow::TFWorkspace; OOptions::Optim.Options=Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5))
+function train_TFModel!(tfow::TFWorkspace; options::Optim.Options=Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5))
     # optimize star
-    _Flux_optimize!(tfow.star, OOptions)
+    _Flux_optimize!(tfow.star, options)
     tfow.tfo.star[:, :] = star_model(tfow.tfm)
 
     # optimize RVs
     tfow.tfm.rv.lm.M[:] = calc_doppler_component_RVSKL(tfow.tfm.star.λ, tfow.tfm.star.lm.μ)
-    _Flux_optimize!(tfow.rv, OOptions)
+    _Flux_optimize!(tfow.rv, options)
     tfow.tfo.rv[:, :] = rv_model(tfow.tfm)
 
     # optimize tellurics
-    _Flux_optimize!(tfow.tel, OOptions)
+    _Flux_optimize!(tfow.tel, options)
     tfow.tfo.tel[:, :] = tel_model(tfow.tfm)
 end
 
-function train_TFModel!(tfow::TFWorkspaceTelStar; OOptions::Optim.Options=Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5))
+function train_TFModel!(tfow::TFWorkspaceTelStar; options::Optim.Options=Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5))
     # optimize tellurics and star
-    _Flux_optimize!(tfow.telstar, OOptions)
+    _Flux_optimize!(tfow.telstar, options)
     tfow.tfo.star[:, :] = star_model(tfow.tfm)
     tfow.tfo.tel[:, :] = tel_model(tfow.tfm)
 
     # optimize RVs
     tfow.tfm.rv.lm.M[:] = calc_doppler_component_RVSKL(tfow.tfm.star.λ, tfow.tfm.star.lm.μ)
-    _Flux_optimize!(tfow.rv, OOptions)
+    _Flux_optimize!(tfow.rv, options)
     tfow.tfo.rv[:, :] = rv_model(tfow.tfm)
 end
