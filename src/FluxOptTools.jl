@@ -149,7 +149,7 @@ struct TFOptimSubWorkspace
     end
 end
 
-abstract type TFOptimWorkspace
+abstract type TFOptimWorkspace end
 
 struct TFWorkspace <: TFOptimWorkspace
     tel::TFOptimSubWorkspace
