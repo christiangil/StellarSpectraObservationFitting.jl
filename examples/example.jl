@@ -16,20 +16,12 @@ plot_stuff=true
 
 @load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k.jld2" tf_model n_obs tf_data
 
-using StatsBase
+tf_model.reg_tel[:] = [1e11, 1e3, 2, 1e4, 1e3]
+tf_model.reg_star[:] = [1e5, 1e-1, 2.4, 1e8, 1e8]
 
-n_obs_train = Int(round(0.75 * n_obs))
-testing_inds = sort(sample(1:n_obs, n_obs-n_obs_train; replace=false))
-training_inds = [i for i in 1:n_obs if !(i in testing_inds)]
+tf_output = tf.TFOutput(tf_model)
 
-tf_data_train = tf_data(training_inds)
-# tf_data_test = tf.TFData(tf_data, testing_inds)
-tf_model_train = tf_model(training_inds)
-# tf_model_test = tf_model(testing_inds)
-tf_output_train = tf.TFOutput(tf_model_train)
-
-tf_workspace_train, loss = tf.TFOptimWorkspace(tf_model_train, tf_output_train, tf_data_train; return_loss_f=true)
-
+tf_workspace, loss = tf.TFWorkspace(tf_model, tf_output, tf_data; return_loss_f=true)
 using Plots
 if plot_stuff
     @load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" airmasses planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
@@ -53,30 +45,30 @@ if plot_stuff
         plot!(predict_plot[2], plot_star_λs, tfo.star[:, plot_epoch] + tfo.rv[:, plot_epoch], label="model star: $tracker", alpha = 0.5)
         display(predict_plot)
     end
-    status_plot(tf_output_train, tf_data_train)
+    status_plot(tf_output, tf_data)
 end
 
 light_speed_nu = 299792458
-rvs_notel = (tf_model_train.rv.lm.s .* light_speed_nu)'
+rvs_notel = (tf_model.rv.lm.s .* light_speed_nu)'
 rvs_std(rvs; inds=:) = std((rvs - rvs_kep_nu[inds]) - rvs_activ_no_noise[inds])
-resid_stds = [rvs_std(rvs_notel; inds=training_inds)]
+resid_stds = [rvs_std(rvs_notel)]
 losses = [loss()]
 tracker = 0
-println("guess $tracker, std=$(round(rvs_std(rvs_notel; inds=training_inds), digits=5))")
+println("guess $tracker, std=$(round(rvs_std(rvs_notel), digits=5))")
 rvs_notel_opt = copy(rvs_notel)
 
 @time for i in 1:8
-    tf.train_TFModel!(tf_workspace_train)
-    rvs_notel_opt[:] = (tf_model_train.rv.lm.s .* light_speed_nu)'
+    tf.train_TFModel!(tf_workspace)
+    rvs_notel_opt[:] = (tf_model.rv.lm.s .* light_speed_nu)'
 
-    append!(resid_stds, [rvs_std(rvs_notel_opt; inds=training_inds)])
+    append!(resid_stds, [rvs_std(rvs_notel_opt)])
     append!(losses, [loss()])
 
-    status_plot(tf_output_train, tf_data_train)
+    status_plot(tf_output, tf_data)
     tracker += 1
     println("guess $tracker")
     println("loss   = $(losses[end])")
-    println("rv std = $(round(rvs_std(rvs_notel_opt; inds=training_inds), digits=5))")
+    println("rv std = $(round(rvs_std(rvs_notel_opt), digits=5))")
 end
 
 plot(0:tracker, resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS", legend=false)
@@ -91,19 +83,19 @@ if plot_stuff
     # Compare first guess at RVs to true signal
     predict_plot = plot_rv()
     plot!(predict_plot, plot_times .% planet_P_nu, plot_rvs_kep, st=:line, color=:red, lw=1, label="Injected Keplerian")
-    plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
+    # plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
     png(predict_plot, "examples/figs/model_0_phase.png")
 
     # Compare RV differences to actual RVs from activity
     predict_plot = plot_rv()
     plot!(predict_plot, times_nu, rvs_activ_noisy, st=:scatter, ms=3, color=:red, label="Activity (with obs. SNR and resolution)")
-    plot!(predict_plot, times_nu, rvs_naive - rvs_kep_nu, st=:scatter, ms=3, color=:blue, label="Before model")
+    # plot!(predict_plot, times_nu, rvs_naive - rvs_kep_nu, st=:scatter, ms=3, color=:blue, label="Before model")
     png(predict_plot, "examples/figs/model_0.png")
 
     # Compare second guess at RVs to true signal
     predict_plot = plot_rv()
     plot!(predict_plot, plot_times .% planet_P_nu, plot_rvs_kep, st=:line, color=:red, lw=1, label="Injected Keplerian")
-    plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
+    # plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
     plot!(predict_plot, times_nu .% planet_P_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
     png(predict_plot, "examples/figs/model_1_phase.png")
 
@@ -116,7 +108,7 @@ if plot_stuff
     # Compare second guess at RVs to true signal
     predict_plot = plot_rv()
     plot!(predict_plot, plot_times .% planet_P_nu, plot_rvs_kep, st=:line, color=:red, lw=1, label="Injected Keplerian")
-    plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
+    # plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
     plot!(predict_plot, times_nu .% planet_P_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
     plot!(predict_plot, times_nu .% planet_P_nu, rvs_notel_opt, st=:scatter, ms=3, color=:darkgreen, label="After optimization")
     png(predict_plot, "examples/figs/model_2_phase.png")

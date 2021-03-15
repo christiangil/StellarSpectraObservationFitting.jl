@@ -173,10 +173,10 @@ struct TFWorkspace <: TFOptimWorkspace
             return tfow
         end
     end
-    function TFWorkspace(tfm::TFModel, tfd::TFData, inds::AbstractVecOrMat; kwargs...)
-        tfm_smol = tfm(inds)
-        return TFWorkspace(tfm_smol, TFOutput(tfm_smol), tfd(inds); kwargs...)
-    end
+    TFWorkspace(tfm::TFModel, tfd::TFData, inds::AbstractVecOrMat; kwargs...) =
+        TFWorkspace(tfm(inds), tfd(inds); kwargs...)
+    TFWorkspace(tfm::TFModel, tfd::TFData; kwargs...) =
+        TFWorkspace(tfm, TFOutput(tfm), tfd; kwargs...)
     function TFWorkspace(tel, star, rv, tfm, tfo, tfd)
         @assert length(tel.θ) == length(star.θ)
         @assert (length(tel.θ) == 1) || (length(tel.θ) == 3)
@@ -202,10 +202,10 @@ struct TFWorkspaceTelStar <: TFOptimWorkspace
             return tfow
         end
     end
-    function TFWorkspaceTelStar(tfm::TFModel, tfd::TFData, inds::AbstractVecOrMat; kwargs...)
-        tfm_smol = tfm(inds)
-        return TFWorkspaceTelStar(tfm_smol, TFOutput(tfm_smol), tfd(inds); kwargs...)
-    end
+    TFWorkspaceTelStar(tfm::TFModel, tfd::TFData, inds::AbstractVecOrMat; kwargs...) =
+        TFWorkspaceTelStar(tfm(inds), tfd(inds); kwargs...)
+    TFWorkspaceTelStar(tfm::TFModel, tfd::TFData; kwargs...)
+        TFWorkspaceTelStar(tfm, TFOutput(tfm), tfd; kwargs...)
     function TFWorkspaceTelStar(telstar, rv, tfm, tfo, tfd)
         @assert (length(telstar.θ) == 2) || (length(telstar.θ) == 6)
         @assert length(rv.θ) == 1
@@ -249,4 +249,10 @@ function train_TFModel!(tfow::TFWorkspaceTelStar; options::Optim.Options=Optim.O
     tfow.tfm.rv.lm.M[:] = calc_doppler_component_RVSKL(tfow.tfm.star.λ, tfow.tfm.star.lm.μ)
     _Flux_optimize!(tfow.rv, options)
     tfow.tfo.rv[:, :] = rv_model(tfow.tfm)
+end
+
+function train_TFModel!(tfow::TFOptimWorkspace, n::Int; options::Optim.Options=Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5))
+    for i in 1:n
+        train_TFModel!(tfow; options=options)
+    end
 end

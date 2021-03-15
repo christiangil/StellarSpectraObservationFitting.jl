@@ -19,12 +19,8 @@ n_obs_train = Int(round(0.75 * n_obs))
 training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
 
 function eval_regularization(train::tf.TFWorkspace, test::tf.TFWorkspace, loss_test::Function)
-    for i in 1:10
-        tf.train_TFModel!(train)
-    end
-    for i in 1:5
-        tf.train_TFModel!(test)
-    end
+    tf.train_TFModel!(train, 10)
+    tf.train_TFModel!(test, 5)
     return loss_test()
 end
 
@@ -68,7 +64,7 @@ function fit_regularization!(tfm::tf.TFModel, tfd::tf.TFData, training_inds::Abs
     # for i in 3
     for i in 1:length(tfm.reg_tel)
         if i != 3
-            test_factor=10
+            test_factor = 10
         else
             test_factor = 1.2
         end
@@ -84,3 +80,5 @@ function fit_regularization!(tfm::tf.TFModel, tfd::tf.TFData, training_inds::Abs
 end
 
 fit_regularization!(tf_model, tf_data, training_inds)
+tf_workspace = tf.TFWorkspace(tf_model, tf_data)
+tf.train_TFModel!(tf_workspace, 10)
