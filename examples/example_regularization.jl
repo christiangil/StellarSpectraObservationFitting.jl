@@ -18,7 +18,7 @@ using StatsBase
 n_obs_train = Int(round(0.75 * n_obs))
 training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
 
-function eval_regularization(train::tf.TFOptimWorkspace, test::tf.TFOptimWorkspace, loss_test::Function)
+function eval_regularization(train::tf.TFWorkspace, test::tf.TFWorkspace, loss_test::Function)
     for i in 1:10
         tf.train_TFModel!(train)
     end
@@ -28,7 +28,7 @@ function eval_regularization(train::tf.TFOptimWorkspace, test::tf.TFOptimWorkspa
     return loss_test()
 end
 
-function fit_regularization_helper!(regs::Vector, reg_ind::Int, train::tf.TFOptimWorkspace, test::tf.TFOptimWorkspace, loss_test::Function; test_factor::Real=10)
+function fit_regularization_helper!(regs::Vector, reg_ind::Int, train::tf.TFWorkspace, test::tf.TFWorkspace, loss_test::Function; test_factor::Real=10)
     ℓs = zeros(2)
     reg_hold = [1, test_factor] .* regs[reg_ind]
     println("initial regularization eval")
@@ -62,8 +62,8 @@ end
 function fit_regularization!(tfm::tf.TFModel, tfd::tf.TFData, training_inds::AbstractVecOrMat)
     testing_inds = [i for i in 1:n_obs if !(i in training_inds)]
     println("creating workspaces")
-    tf_workspace_train = tf.TFOptimWorkspace(tfm, tfd, training_inds)
-    tf_workspace_test, loss_test = tf.TFOptimWorkspace(tfm, tfd, testing_inds; return_loss_f=true, only_s=true)
+    tf_workspace_train = tf.TFWorkspace(tfm, tfd, training_inds)
+    tf_workspace_test, loss_test = tf.TFWorkspace(tfm, tfd, testing_inds; return_loss_f=true, only_s=true)
     println("starting regularization searches")
     # for i in 3
     for i in 1:length(tfm.reg_tel)
