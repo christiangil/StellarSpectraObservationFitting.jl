@@ -18,13 +18,13 @@ using StatsBase
 n_obs_train = Int(round(0.75 * n_obs))
 training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
 
-function eval_regularization(train::tf.TFWorkspace, test::tf.TFWorkspace, loss_test::Function)
+function eval_regularization(train::tf.TFOptimWorkspace, test::tf.TFOptimWorkspace, loss_test::Function)
     tf.train_TFModel!(train, 10)
     tf.train_TFModel!(test, 5)
     return loss_test()
 end
 
-function fit_regularization_helper!(regs::Vector, reg_ind::Int, train::tf.TFWorkspace, test::tf.TFWorkspace, loss_test::Function; test_factor::Real=10)
+function fit_regularization_helper!(regs::Vector, reg_ind::Int, train::tf.TFOptimWorkspace, test::tf.TFOptimWorkspace, loss_test::Function; test_factor::Real=10)
     ℓs = zeros(2)
     reg_hold = [1, test_factor] .* regs[reg_ind]
     println("initial regularization eval")
@@ -55,11 +55,16 @@ function fit_regularization_helper!(regs::Vector, reg_ind::Int, train::tf.TFWork
     end
 end
 
-function fit_regularization!(tfm::tf.TFModel, tfd::tf.TFData, training_inds::AbstractVecOrMat)
+function fit_regularization!(tfm::tf.TFModel, tfd::tf.TFData, training_inds::AbstractVecOrMat; use_telstar::Bool=true)
     testing_inds = [i for i in 1:n_obs if !(i in training_inds)]
     println("creating workspaces")
-    tf_workspace_train = tf.TFWorkspace(tfm, tfd, training_inds)
-    tf_workspace_test, loss_test = tf.TFWorkspace(tfm, tfd, testing_inds; return_loss_f=true, only_s=true)
+    if use_telstar
+        tf_workspace_train = tf.TFWorkspaceTelStar(tfm, tfd, training_inds)
+        tf_workspace_test, loss_test = tf.TFWorkspaceTelStar(tfm, tfd, testing_inds; return_loss_f=true, only_s=true)
+    else
+        tf_workspace_train = tf.TFWorkspace(tfm, tfd, training_inds)
+        tf_workspace_test, loss_test = tf.TFWorkspace(tfm, tfd, testing_inds; return_loss_f=true, only_s=true)
+    end
     println("starting regularization searches")
     # for i in 3
     for i in 1:length(tfm.reg_tel)
@@ -79,6 +84,11 @@ function fit_regularization!(tfm::tf.TFModel, tfd::tf.TFData, training_inds::Abs
     end
 end
 
-fit_regularization!(tf_model, tf_data, training_inds)
-tf_workspace = tf.TFWorkspace(tf_model, tf_data)
+use_telstar = true
+fit_regularization!(tf_model, tf_data, training_inds; use_telstar=use_telstar)
+if use_telstar
+    tf_workspace = tf.TFWorkspaceTelStar(tf_model, tf_data)
+else
+    tf_workspace = tf.TFWorkspace(tf_model, tf_data)
+end
 tf.train_TFModel!(tf_workspace, 10)

@@ -16,12 +16,21 @@ plot_stuff=true
 
 @load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k.jld2" tf_model n_obs tf_data
 
-tf_model.reg_tel[:] = [1e11, 1e3, 2, 1e4, 1e3]
-tf_model.reg_star[:] = [1e5, 1e-1, 2.4, 1e8, 1e8]
+use_telstar = true
 
 tf_output = tf.TFOutput(tf_model)
 
-tf_workspace, loss = tf.TFWorkspace(tf_model, tf_output, tf_data; return_loss_f=true)
+if use_telstar
+    tf_model.reg_tel[:] = [1e7, 1e3, 2, 1e7, 1e5]
+    tf_model.reg_star[:] = [1e6, 1e-1, 2, 1e11, 1e7]
+    tf_workspace, loss = tf.TFWorkspaceTelStar(tf_model, tf_output, tf_data; return_loss_f=true)
+else
+    tf_model.reg_tel[:] = [1e11, 1e3, 2, 1e4, 1e3]
+    tf_model.reg_star[:] = [1e5, 1e-1, 2.4, 1e8, 1e8]
+    tf_workspace, loss = tf.TFWorkspace(tf_model, tf_output, tf_data; return_loss_f=true)
+end
+
+
 using Plots
 if plot_stuff
     @load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" airmasses planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels

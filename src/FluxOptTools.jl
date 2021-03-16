@@ -204,7 +204,7 @@ struct TFWorkspaceTelStar <: TFOptimWorkspace
     end
     TFWorkspaceTelStar(tfm::TFModel, tfd::TFData, inds::AbstractVecOrMat; kwargs...) =
         TFWorkspaceTelStar(tfm(inds), tfd(inds); kwargs...)
-    TFWorkspaceTelStar(tfm::TFModel, tfd::TFData; kwargs...)
+    TFWorkspaceTelStar(tfm::TFModel, tfd::TFData; kwargs...) =
         TFWorkspaceTelStar(tfm, TFOutput(tfm), tfd; kwargs...)
     function TFWorkspaceTelStar(telstar, rv, tfm, tfo, tfd)
         @assert (length(telstar.θ) == 2) || (length(telstar.θ) == 6)
