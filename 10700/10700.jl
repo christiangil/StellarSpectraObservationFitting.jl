@@ -80,6 +80,7 @@ plot(0:tracker, resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS"
 plot(0:tracker, losses; xlabel="iter", ylabel="loss", legend=false)
 
 ## Plots
+using LinearAlgebra
 
 if plot_stuff
 
@@ -99,26 +100,26 @@ if plot_stuff
     png(predict_plot, fig_dir * "model_2.png")
 
     predict_plot = plot_spectrum(; title="Stellar model")
-    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 1]; label="basis 1")
-    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 2]; label="basis 2")
+    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 1] ./ norm(tf_model.star.lm.M[:, 1]); label="basis 1")
+    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 2] ./ norm(tf_model.star.lm.M[:, 2]); label="basis 2")
     plot!(tf_model.star.λ, tf_model.star.lm.μ; label="μ")
     png(predict_plot, fig_dir * "model_star_basis.png")
 
     plot_scores(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "Weights", dpi = 400, kwargs...)
     predict_plot = plot_scores(; title="Stellar model")
-    scatter!(times_nu, tf_model.star.lm.s[1, :]; label="weights 1")
-    scatter!(times_nu, tf_model.star.lm.s[2, :]; label="weights 2")
+    scatter!(times_nu, tf_model.star.lm.s[1, :] .* norm(tf_model.star.lm.M[:, 1]); label="weights 1")
+    scatter!(times_nu, tf_model.star.lm.s[2, :] .* norm(tf_model.star.lm.M[:, 2]); label="weights 2")
     png(predict_plot, fig_dir * "model_star_weights.png")
 
     predict_plot = plot_spectrum(; title="Telluric model")
-    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 1]; label="basis 1")
-    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,2]; label="basis 2")
+    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 1] ./ norm(tf_model.tel.lm.M[:, 1]); label="basis 1")
+    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 2] ./ norm(tf_model.tel.lm.M[:, 2]); label="basis 2")
     plot!(tf_model.tel.λ, tf_model.tel.lm.μ; label="μ")
     png(predict_plot, fig_dir * "model_tel_basis.png")
 
     predict_plot = plot_scores(; title="Telluric model")
-    scatter!(times_nu, tf_model.tel.lm.s[1, :]; label="weights 1")
-    scatter!(times_nu, tf_model.tel.lm.s[2, :]; label="weights 2")
+    scatter!(times_nu, tf_model.tel.lm.s[1, :] ./ norm(tf_model.tel.lm.M[:, 1]); label="weights 1")
+    scatter!(times_nu, tf_model.tel.lm.s[2, :] ./ norm(tf_model.tel.lm.M[:, 2]); label="weights 2")
     scatter!(times_nu, airmasses; label="airmasses")
     png(predict_plot, fig_dir * "model_tel_weights.png")
 end
