@@ -56,7 +56,9 @@ obs_resolution = 150000
 desired_order = 50
 
 n_obs = length(all_spectra)
-mask_inds = 770:6650
+inst = all_spectra[1].inst
+extra_chop = 80
+mask_inds = (min_col_default(inst) + extra_chop):(max_col_default(inst) - extra_chop)
 
 len_obs = length(mask_inds)
 flux_obs = ones(len_obs, n_obs)
@@ -74,7 +76,7 @@ tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
 ## Initializing models
 
 star_model_res = 2 * sqrt(2) * obs_resolution
-tel_model_res = sqrt(2) * obs_resolution
+tel_model_res = 2 * sqrt(2) * obs_resolution
 
 @time tf_model = tf.TFModel(tf_data, star_model_res, tel_model_res)
 
