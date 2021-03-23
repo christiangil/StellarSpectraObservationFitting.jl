@@ -7,7 +7,7 @@ using JLD2
 using Statistics
 import telfitting; tf = telfitting
 
-plot_stuff=true
+plot_stuff = true
 use_telstar = true
 improve_regularization = true
 
