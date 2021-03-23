@@ -37,8 +37,11 @@ end
 
 # Something buggy if include order 1.  Order 86 essentially ignored due to tellurics. First and last orders have NaN issues
 #max_orders = 12:83
-# lfc_orders = 43:72
-# order_list_timeseries = extract_orders(all_spectra,pipeline_plan; orders_to_use=lfc_orders, recalc=true)
+lfc_orders = 43:72
+order_list_timeseries = extract_orders(all_spectra,pipeline_plan; orders_to_use=lfc_orders, recalc=true)
+
+times_nu = pipeline_plan.cache[:extract_orders].times
+airmasses = [parse(Float64, md[:airmass]) for md in pipeline_plan.cache[:extract_orders].metadata]
 
 # @save "C:/Users/chris/OneDrive/Desktop/test.jld2" order_list_timeseries
 # pipeline_plan.cache[:extract_orders] == order_list_timeseries
@@ -55,7 +58,7 @@ desired_order = 50
 n_obs = length(all_spectra)
 mask_inds = 770:6650
 
-len_obs = length(order_inds)
+len_obs = length(mask_inds)
 flux_obs = ones(len_obs, n_obs)
 var_obs = zeros(len_obs, n_obs)
 log_λ_obs = zeros(len_obs, n_obs)
@@ -77,4 +80,4 @@ tel_model_res = sqrt(2) * obs_resolution
 
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, tf_data; use_gp=true)
 
-@save "C:/Users/chris/OneDrive/Desktop/telfitting/10700.jld2" tf_model n_obs tf_data rvs_naive rvs_notel
+@save "C:/Users/chris/OneDrive/Desktop/telfitting/10700.jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses

@@ -8,25 +8,33 @@ using Statistics
 import telfitting; tf = telfitting
 
 plot_stuff=true
+use_telstar = true
+improve_regularization = true
 
 ## Setting up necessary variables and functions
 
-@load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k.jld2" tf_model n_obs tf_data
+@load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k.jld2" tf_model n_obs tf_data rvs_notel rvs_naive
 
-use_telstar = true
+if improve_regularization
+    using StatsBase
+    n_obs_train = Int(round(0.75 * n_obs))
+    training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
+    tf.fit_regularization!(tf_model, tf_data, training_inds; use_telstar=use_telstar)
+elseif use_telstar
+    tf_model.reg_tel[:] = [1e7, 1e3, 2, 1e7, 1e5]
+    tf_model.reg_star[:] = [1e6, 1e-1, 2, 1e11, 1e7]
+else
+    tf_model.reg_tel[:] = [1e11, 1e3, 2, 1e4, 1e3]
+    tf_model.reg_star[:] = [1e5, 1e-1, 2.4, 1e8, 1e8]
+end
 
 tf_output = tf.TFOutput(tf_model)
 
 if use_telstar
-    tf_model.reg_tel[:] = [1e7, 1e3, 2, 1e7, 1e5]
-    tf_model.reg_star[:] = [1e6, 1e-1, 2, 1e11, 1e7]
     tf_workspace, loss = tf.TFWorkspaceTelStar(tf_model, tf_output, tf_data; return_loss_f=true)
 else
-    tf_model.reg_tel[:] = [1e11, 1e3, 2, 1e4, 1e3]
-    tf_model.reg_star[:] = [1e5, 1e-1, 2.4, 1e8, 1e8]
     tf_workspace, loss = tf.TFWorkspace(tf_model, tf_output, tf_data; return_loss_f=true)
 end
-
 
 using Plots
 if plot_stuff
@@ -46,7 +54,7 @@ if plot_stuff
         plot!(predict_plot[1], obs_λ, tfd.flux[:, plot_epoch] ./ (tfo.star[:, plot_epoch] + tfo.rv[:, plot_epoch]), label="predicted tel", alpha = 0.5)
         plot!(predict_plot[1], obs_λ, tfo.tel[:, plot_epoch], label="model tel: $tracker", alpha = 0.5)
         plot_star_λs = exp.(tfd.log_λ_star[:, plot_epoch])
-        plot!(predict_plot[2], plot_star_λs, tfd.flux[:, plot_epoch] ./ true_tels[:, plot_epoch], label="true star", )
+        plot!(predict_plot[2], plot_star_λs, tfd.flux[:, plot_epoch] ./ true_tels[:, plot_epoch], label="true star")
         plot!(predict_plot[2], plot_star_λs, tfd.flux[:, plot_epoch] ./ tfo.tel[:, plot_epoch], label="predicted star", alpha = 0.5)
         plot!(predict_plot[2], plot_star_λs, tfo.star[:, plot_epoch] + tfo.rv[:, plot_epoch], label="model star: $tracker", alpha = 0.5)
         display(predict_plot)
@@ -86,30 +94,32 @@ plot_stuff = true
 
 if plot_stuff
 
+    fig_dir = "examples/figs/"
+
     # Compare first guess at RVs to true signal
     predict_plot = plot_rv()
     plot!(predict_plot, plot_times .% planet_P_nu, plot_rvs_kep, st=:line, color=:red, lw=1, label="Injected Keplerian")
     # plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
-    png(predict_plot, "examples/figs/model_0_phase.png")
+    png(predict_plot, fig_dir * "model_0_phase.png")
 
     # Compare RV differences to actual RVs from activity
     predict_plot = plot_rv()
     plot!(predict_plot, times_nu, rvs_activ_noisy, st=:scatter, ms=3, color=:red, label="Activity (with obs. SNR and resolution)")
     # plot!(predict_plot, times_nu, rvs_naive - rvs_kep_nu, st=:scatter, ms=3, color=:blue, label="Before model")
-    png(predict_plot, "examples/figs/model_0.png")
+    png(predict_plot, fig_dir * "model_0.png")
 
     # Compare second guess at RVs to true signal
     predict_plot = plot_rv()
     plot!(predict_plot, plot_times .% planet_P_nu, plot_rvs_kep, st=:line, color=:red, lw=1, label="Injected Keplerian")
     # plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
     plot!(predict_plot, times_nu .% planet_P_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
-    png(predict_plot, "examples/figs/model_1_phase.png")
+    png(predict_plot, fig_dir * "model_1_phase.png")
 
     # Compare RV differences to actual RVs from activity
     predict_plot = plot_rv()
     plot!(predict_plot, times_nu, rvs_activ_noisy, st=:scatter, ms=3, color=:red, label="Activity (with obs. SNR and resolution)")
     plot!(predict_plot, times_nu, rvs_notel - rvs_kep_nu, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
-    png(predict_plot, "examples/figs/model_1.png")
+    png(predict_plot, fig_dir * "model_1.png")
 
     # Compare second guess at RVs to true signal
     predict_plot = plot_rv()
@@ -117,14 +127,14 @@ if plot_stuff
     # plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
     plot!(predict_plot, times_nu .% planet_P_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
     plot!(predict_plot, times_nu .% planet_P_nu, rvs_notel_opt, st=:scatter, ms=3, color=:darkgreen, label="After optimization")
-    png(predict_plot, "examples/figs/model_2_phase.png")
+    png(predict_plot, fig_dir * "model_2_phase.png")
 
     # Compare RV differences to actual RVs from activity
     predict_plot = plot_rv()
     plot!(predict_plot, times_nu, rvs_activ_noisy, st=:scatter, ms=3, color=:red, label="Activity (with obs. SNR and resolution)")
     plot!(predict_plot, times_nu, rvs_notel - rvs_kep_nu, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
     plot!(predict_plot, times_nu, rvs_notel_opt - rvs_kep_nu, st=:scatter, ms=3, color=:darkgreen, label="After optimization")
-    png(predict_plot, "examples/figs/model_2.png")
+    png(predict_plot, fig_dir * "model_2.png")
 
     # predict_plot = plot_spectrum(; xlim=(627.8,628.3)) # o2
     # predict_plot = plot_spectrum(; xlim = (647, 656))  # h2o
@@ -133,43 +143,43 @@ if plot_stuff
     plot!(tf_model.star.λ, tf_model.star.lm.M[:, 1]; label="basis 1")
     plot!(tf_model.star.λ, tf_model.star.lm.M[:, 2]; label="basis 2")
     plot!(tf_model.star.λ, tf_model.star.lm.μ; label="μ")
-    png(predict_plot, "examples/figs/model_star_basis.png")
+    png(predict_plot, fig_dir * "model_star_basis.png")
 
     predict_plot = plot_spectrum(; xlim=(647, 656), title="Stellar model")  # h2o
     plot!(tf_model.star.λ, tf_model.star.lm.M[:, 1]; label="basis 1")
     plot!(tf_model.star.λ, tf_model.star.lm.M[:, 2]; label="basis 2")
     plot!(tf_model.star.λ, tf_model.star.lm.μ; label="μ star")
     plot!(tf_model.tel.λ, tf_model.tel.lm.μ; label="μ tel")
-    png(predict_plot, "examples/figs/model_star_basis_h2o.png")
+    png(predict_plot, fig_dir * "model_star_basis_h2o.png")
 
     plot_scores(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "Weights", dpi = 400, kwargs...)
     predict_plot = plot_scores(; title="Stellar model")
     scatter!(times_nu, tf_model.star.lm.s[1, :]; label="weights 1")
     scatter!(times_nu, tf_model.star.lm.s[2, :]; label="weights 2")
-    png(predict_plot, "examples/figs/model_star_weights.png")
+    png(predict_plot, fig_dir * "model_star_weights.png")
 
     predict_plot = plot_spectrum(; title="Telluric model")
     plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 1]; label="basis 1")
     plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,2]; label="basis 2")
     plot!(tf_model.tel.λ, tf_model.tel.lm.μ; label="μ")
-    png(predict_plot, "examples/figs/model_tel_basis.png")
+    png(predict_plot, fig_dir * "model_tel_basis.png")
 
     predict_plot = plot_spectrum(;xlim=(647, 656), title="Telluric model (H2O)")  # h2o
     plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,1]; label="basis 1")
     plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,2]; label="basis 2")
     plot!(tf_model.tel.λ, tf_model.tel.lm.μ; label="μ")
-    png(predict_plot, "examples/figs/model_tel_basis_h2o.png")
+    png(predict_plot, fig_dir * "model_tel_basis_h2o.png")
     predict_plot = plot_spectrum(;xlim=(627.8,628.3), title="Telluric model (O2)")  # o2
     plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,1]; label="basis 1")
     plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,2]; label="basis 2")
     plot!(tf_model.tel.λ, tf_model.tel.lm.μ; label="μ")
-    png(predict_plot, "examples/figs/model_tel_basis_o2.png")
+    png(predict_plot, fig_dir * "model_tel_basis_o2.png")
 
     predict_plot = plot_scores(; title="Telluric model")
     scatter!(times_nu, tf_model.tel.lm.s[1, :]; label="weights 1")
     scatter!(times_nu, tf_model.tel.lm.s[2, :]; label="weights 2")
     scatter!(times_nu, airmasses .- 3; label="airmasses")
-    png(predict_plot, "examples/figs/model_tel_weights.png")
+    png(predict_plot, fig_dir * "model_tel_weights.png")
 end
 
 std((rvs_naive - rvs_kep_nu) - rvs_activ_no_noise)
