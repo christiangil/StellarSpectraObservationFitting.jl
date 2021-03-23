@@ -5,10 +5,7 @@ Pkg.instantiate()
 
 using JLD2
 using Statistics
-import telfitting
-# Pkg.status("telfitting")
-# @time include("src/telfitting.jl")
-tf = telfitting
+import telfitting; tf = telfitting
 
 plot_stuff=true
 

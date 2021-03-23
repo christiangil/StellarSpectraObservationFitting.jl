@@ -12,8 +12,7 @@ Pkg.activate("examples")
 Pkg.instantiate()
 
 using JLD2
-import telfitting
-tf = telfitting
+import telfitting; tf = telfitting
 
 ## Loading (pregenerated) data
 

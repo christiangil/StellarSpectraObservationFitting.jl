@@ -4,10 +4,7 @@ Pkg.activate("examples")
 Pkg.instantiate()
 
 using JLD2
-import telfitting
-# Pkg.status("telfitting")
-# @time include("src/telfitting.jl")
-tf = telfitting
+import telfitting; tf = telfitting
 
 ## Setting up necessary variables and functions
 
