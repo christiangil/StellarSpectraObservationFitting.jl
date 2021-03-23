@@ -12,11 +12,7 @@ Pkg.activate("examples")
 Pkg.instantiate()
 
 using JLD2
-# using Stheno
-# using TemporalGPs
-# using UnitfulAstro, Unitful
 import telfitting
-# @time include("src/telfitting.jl")
 tf = telfitting
 
 ## Loading (pregenerated) data
