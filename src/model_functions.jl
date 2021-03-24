@@ -339,16 +339,27 @@ function initialize!(tfm, tfd; min::Number=0.05, max::Number=1.1, use_gp::Bool=f
 	return rvs_notel, rvs_naive
 end
 
-L1(thing) = sum(abs.(thing))
-L2(thing) = sum(thing .* thing)
+L1(a::AbstractArray) = sum(abs.(a))
+L2(a::AbstractArray) = sum(a .* a)
+shared_attention(v1::AbstractVector, v2::AbstractVector) = dot(abs.(v1), abs.(v2))
 
 function model_prior(lm, coeffs::Vector{<:Real})
-    μ_mod = lm.μ .- 1
+	# @assert length(coeffs) == 6
+	# val = 0
+	# for i in size(lm.M, 2)
+	# 	for j in size(lm.M, 2)
+	# 		if i != j
+	# 			val += shared_attention(lm.M[:, i], lm.M[:, j])
+	# 		end
+	# 	end
+	# end
+	μ_mod = lm.μ .- 1
     return (coeffs[1] * L2(μ_mod)) +
 	(coeffs[2] * (L1(μ_mod) + (coeffs[3] * sum(μ_mod[μ_mod .> 0])))) +
 	(coeffs[4] * L2(lm.M)) +
     (coeffs[5] * L1(lm.M)) +
-    L1(lm.s)
+    L1(lm.s) #+
+	# (coeffs[6] * val)
 end
 
 struct TFOutput{T<:Real}
