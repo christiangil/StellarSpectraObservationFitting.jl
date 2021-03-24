@@ -1,19 +1,21 @@
 ## Setup
 using Pkg
-Pkg.activate("10700")
+Pkg.activate("EXPRES")
 Pkg.instantiate()
 
 using JLD2
 using Statistics
 import telfitting; tf = telfitting
 
+stars = ["10700", "26965"]
+star = stars[2]
 plot_stuff = true
 use_telstar = true
 improve_regularization = true
 
 ## Setting up necessary variables and functions
 
-@load "C:/Users/chris/OneDrive/Desktop/telfitting/10700.jld2" tf_model n_obs tf_data rvs_notel
+@load "C:/Users/chris/OneDrive/Desktop/telfitting/" * star * ".jld2" tf_model n_obs tf_data rvs_notel
 
 if improve_regularization
     using StatsBase
@@ -35,7 +37,7 @@ end
 
 using Plots
 if plot_stuff
-    @load "C:/Users/chris/OneDrive/Desktop/telfitting/10700.jld2" rvs_naive airmasses times_nu
+    @load "C:/Users/chris/OneDrive/Desktop/telfitting/" * star * ".jld2" rvs_naive airmasses times_nu
 
     plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (Å)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
     plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
@@ -84,7 +86,7 @@ using LinearAlgebra
 
 if plot_stuff
 
-    fig_dir = "10700/figs/"
+    fig_dir = "EXPRES/figs/" * star * "_"
 
     # Compare RV differences to actual RVs from activity
     predict_plot = plot_rv()
@@ -118,8 +120,8 @@ if plot_stuff
     png(predict_plot, fig_dir * "model_tel_basis.png")
 
     predict_plot = plot_scores(; title="Telluric model")
-    scatter!(times_nu, tf_model.tel.lm.s[1, :] ./ norm(tf_model.tel.lm.M[:, 1]); label="weights 1")
-    scatter!(times_nu, tf_model.tel.lm.s[2, :] ./ norm(tf_model.tel.lm.M[:, 2]); label="weights 2")
+    scatter!(times_nu, tf_model.tel.lm.s[1, :] .* norm(tf_model.tel.lm.M[:, 1]); label="weights 1")
+    scatter!(times_nu, tf_model.tel.lm.s[2, :] .* norm(tf_model.tel.lm.M[:, 2]); label="weights 2")
     scatter!(times_nu, airmasses; label="airmasses")
     png(predict_plot, fig_dir * "model_tel_weights.png")
 end

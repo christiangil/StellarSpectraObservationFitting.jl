@@ -1,6 +1,6 @@
 ## Setup
 using Pkg
-Pkg.activate("10700")
+Pkg.activate("EXPRES")
 Pkg.instantiate()
 
 ## Importing data with Eric's code
@@ -10,15 +10,18 @@ Pkg.instantiate()
 # Pkg.develop(; url="https://github.com/RvSpectML/RvSpectMLBase.jl")
 # Pkg.develop(;path="C:/Users/chris/Dropbox/GP_research/julia/telfitting")
 
+stars = ["10700", "26965"]
+star = stars[2]
+
 using RvSpectMLBase, RvSpectML
 using EchelleInstruments, EchelleInstruments.EXPRES
 using CSV, DataFrames, Query, StatsBase, Statistics, Dates
 
-target_subdir = "10700/"   # USER: Replace with directory of your choice
-fits_target_str = "10700"
-paths_to_search_for_param = ["10700"]
+target_subdir = star * "/"   # USER: Replace with directory of your choice
+fits_target_str = star
+paths_to_search_for_param = ["EXPRES"]
 
-expres_data_path = "C:/Users/chris/OneDrive/Desktop/"
+expres_data_path = "C:/Users/chris/OneDrive/Desktop/telfitting/"
 
 # NOTE: make_manifest does not update its paths_to_search when default_paths_to_search is defined here, so if you change the line above, you must also include "paths_to_search=default_paths_to_search" in the make_manifest() function call below
 pipeline_plan = PipelinePlan()
@@ -57,6 +60,9 @@ desired_order = 50
 
 n_obs = length(all_spectra)
 inst = all_spectra[1].inst
+
+minmax_col_excalibur_avail
+
 extra_chop = 80
 mask_inds = (min_col_default(inst) + extra_chop):(max_col_default(inst) - extra_chop)
 
@@ -82,4 +88,4 @@ tel_model_res = 2 * sqrt(2) * obs_resolution
 
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, tf_data; use_gp=true)
 
-@save "C:/Users/chris/OneDrive/Desktop/telfitting/10700.jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
+@save "C:/Users/chris/OneDrive/Desktop/telfitting/" * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
