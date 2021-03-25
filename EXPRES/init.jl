@@ -27,17 +27,40 @@ expres_data_path = "C:/Users/chris/OneDrive/Desktop/telfitting/"
 pipeline_plan = PipelinePlan()
 dont_make_plot!(pipeline_plan, :movie)
 reset_all_needs!(pipeline_plan)
+masks = Array{UnitRange, 2}(undef, length(readdir(expres_data_path * target_subdir)), 86)
 if need_to(pipeline_plan,:read_spectra)
     df_files = make_manifest(expres_data_path, target_subdir, EXPRES)
     # Reading in customized parameters from param.jl.
     eval(code_to_include_param_jl(paths_to_search=paths_to_search_for_param))
     # Reading in FITS files
-    @time all_spectra = map(row->EXPRES.read_data(row; store_min_data=true, store_tellurics=true, normalization=:continuum, return_λ_obs=true),eachrow(df_files_use))
-    #@time all_spectra = map(row->EXPRES.read_data(row,store_min_data=true, store_tellurics=true, store_blaze=true, store_continuum=true, store_pixel_mask=true,normalization=:continuum),eachrow(df_files_use))
+
+    all_spectra = Spectra2DExtended[]
+    for j in 1:size(masks, 1)
+        row = eachrow(df_files_use)[j]
+        spectra, mask = EXPRES.read_data(row; store_min_data=true, store_tellurics=true, normalization=:continuum, return_λ_obs=true, return_excalibur_mask=true)
+        append!(all_spectra, [spectra])
+        for i in 1:size(mask, 2)
+            try
+                x = findfirst(view(mask, :, i)):findlast(view(mask, :, i))
+                masks[j, i] = x
+                @assert all(mask[x, i] .== true)
+            catch y
+                if typeof(y)==MethodError
+                    masks[j, i] = 0:0
+                else
+                    throw(y)
+                end
+            end
+        end
+    end
     GC.gc()
     dont_need_to!(pipeline_plan,:read_spectra)
 end
 
+inds = Vector{UnitRange}(undef, 86)
+for i in 1:length(inds)
+    inds[i] = maximum([mask[1] for mask in masks[:, i]]):minimum([mask[end] for mask in masks[:, i]])
+end
 # Something buggy if include order 1.  Order 86 essentially ignored due to tellurics. First and last orders have NaN issues
 #max_orders = 12:83
 lfc_orders = 43:72
@@ -59,12 +82,8 @@ obs_resolution = 150000
 desired_order = 50
 
 n_obs = length(all_spectra)
-inst = all_spectra[1].inst
-
-minmax_col_excalibur_avail
-
-extra_chop = 80
-mask_inds = (min_col_default(inst) + extra_chop):(max_col_default(inst) - extra_chop)
+extra_chop = 0
+mask_inds = (inds[desired_order][1] + extra_chop):(inds[desired_order][end] - extra_chop)
 
 len_obs = length(mask_inds)
 flux_obs = ones(len_obs, n_obs)
