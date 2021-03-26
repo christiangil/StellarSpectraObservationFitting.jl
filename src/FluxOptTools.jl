@@ -4,7 +4,7 @@
 using LinearAlgebra, Optim, Flux, Zygote# , RecipesBase
 import Base.copyto!
 
-veclength(grads::Zygote.Grads) = sum(length(g[1]) for g in grads.grads if !(typeof(g[1])<:GlobalRef))
+veclength(grads::Zygote.Grads) = sum(length(g[1]) for g in grads.grads if !(typeof(g[1])<:GlobalRef || typeof(g[1])<:Dict))
 veclength(params::Flux.Params) = sum(length, params.params)
 veclength(x) = length(x)
 Base.zeros(grads::Zygote.Grads) = zeros(veclength(grads))
@@ -16,7 +16,7 @@ function copyto!(v::AbstractArray, grads::Zygote.Grads)
     @assert length(v) == veclength(grads)
     s = 1
     for g in grads.grads
-        if !(typeof(g[1])<:GlobalRef)
+        if !(typeof(g[1])<:GlobalRef || typeof(g[1])<:Dict)
             l = length(g[2])
             v[s:s+l-1] .= vec(g[2])
             s += l

@@ -23,8 +23,16 @@ if improve_regularization
     training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
     tf.fit_regularization!(tf_model, tf_data, training_inds; use_telstar=use_telstar)
 elseif use_telstar
-    tf_model.reg_tel[:] = [1e4, 1e3, 2, 1e7, 1e4]
-    tf_model.reg_star[:] = [1e3, 1e-1, 2.4, 1e9, 1e4]
+    tf_model.reg_tel[:L2_μ] = 1e4
+    tf_model.reg_tel[:L1_μ] = 1e3
+    tf_model.reg_tel[:L1_μ₊_factor] = 2
+    tf_model.reg_tel[:L2_M] = 1e7
+    tf_model.reg_tel[:L1_M] = 1e4
+    tf_model.reg_star[:L2_μ] = 1e3
+    tf_model.reg_star[:L1_μ] = 1e-1
+    tf_model.reg_star[:L1_μ₊_factor] = 2.4
+    tf_model.reg_star[:L2_M] = 1e9
+    tf_model.reg_star[:L1_M] = 1e4
 end
 
 tf_output = tf.TFOutput(tf_model)

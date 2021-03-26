@@ -156,8 +156,8 @@ struct TFModel{T<:Number}
     tel::TFSubmodel{T}
     star::TFSubmodel{T}
 	rv::TFSubmodel{T}
-	reg_tel::Vector{T}
-	reg_star::Vector{T}
+	reg_tel::Dict{Symbol, T}
+	reg_star::Dict{Symbol, T}
     lih_t2b::LinearInterpolationHelper
     lih_b2t::LinearInterpolationHelper
     lih_o2b::LinearInterpolationHelper
@@ -184,11 +184,15 @@ struct TFModel{T<:Number}
             star_log_λ_tel[:, i] = star.log_λ .+ star_dop[i]
         end
         lih_t2b, lih_b2t = LinearInterpolationHelper_maker(tel.log_λ, star_log_λ_tel)
-        return TFModel(tel, star, rv, [1e4, 1e3, 2, 1e7, 1e4], [1e3, 1e-1, 2, 1e7, 1e6], lih_t2b, lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t)
+		reg_tel = Dict([(:shared_M, 1e3), (:L2_μ, 1e4), (:L1_μ, 1e3),
+			(:L1_μ₊_factor, 2), (:L2_M, 1e7), (:L1_M, 1e4)])
+		reg_star = Dict([(:shared_M, 1e3), (:L2_μ, 1e3), (:L1_μ, 1e-1),
+			(:L1_μ₊_factor, 2), (:L2_M, 1e7), (:L1_M, 1e6)])
+        return TFModel(tel, star, rv, reg_tel, reg_star, lih_t2b, lih_b2t,
+			lih_o2b, lih_b2o, lih_t2o, lih_o2t)
     end
     function TFModel(tel::TFSubmodel{T}, star, rv, reg_tel, reg_star, lih_t2b,
 		lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t) where {T<:Number}
-		@assert length(reg_tel) == length(reg_star) == 5
 		return new{T}(tel, star, rv, reg_tel, reg_star, lih_t2b, lih_b2t, lih_o2b, lih_b2o, lih_t2o, lih_o2t)
 	end
 end
@@ -343,23 +347,33 @@ L1(a::AbstractArray) = sum(abs.(a))
 L2(a::AbstractArray) = sum(a .* a)
 shared_attention(v1::AbstractVector, v2::AbstractVector) = dot(abs.(v1), abs.(v2))
 
-function model_prior(lm, coeffs::Vector{<:Real})
-	# @assert length(coeffs) == 6
-	# val = 0
-	# for i in size(lm.M, 2)
-	# 	for j in size(lm.M, 2)
-	# 		if i != j
-	# 			val += shared_attention(lm.M[:, i], lm.M[:, j])
-	# 		end
-	# 	end
-	# end
-	μ_mod = lm.μ .- 1
-    return (coeffs[1] * L2(μ_mod)) +
-	(coeffs[2] * (L1(μ_mod) + (coeffs[3] * sum(μ_mod[μ_mod .> 0])))) +
-	(coeffs[4] * L2(lm.M)) +
-    (coeffs[5] * L1(lm.M)) +
-    L1(lm.s) #+
-	# (coeffs[6] * val)
+function model_prior(lm, reg::Dict{Symbol, <:Real})
+	val = 0
+	if haskey(reg, :shared_M)
+		shared_att = 0
+		for i in size(lm.M, 2)
+			for j in size(lm.M, 2)
+				if i != j
+					shared_att += shared_attention(lm.M[:, i], lm.M[:, j])
+				end
+			end
+		end
+		val += shared_att * reg[:shared_M]
+	end
+	if haskey(reg, :L2_μ) || haskey(reg, :L1_μ) || haskey(reg, :L1_μ₊_factor)
+		μ_mod = lm.μ .- 1
+		if haskey(reg, :L2_μ); val += L2(μ_mod) * reg[:L2_μ] end
+		if haskey(reg, :L1_μ)
+			val += L1(μ_mod) * reg[:L1_μ]
+			if haskey(reg, :L1_μ₊_factor)
+				val += sum(view(μ_mod, μ_mod .> 0)) * reg[:L1_μ₊_factor] * reg[:L1_μ]
+			end
+		end
+	end
+	if haskey(reg, :L2_M); val += L2(lm.M) * reg[:L2_M] end
+	if haskey(reg, :L1_M); val += L1(lm.M) * reg[:L1_M] end
+	if haskey(reg, :L1_M) || haskey(reg, :L2_M); val += L1(lm.s) end
+	return val
 end
 
 struct TFOutput{T<:Real}
