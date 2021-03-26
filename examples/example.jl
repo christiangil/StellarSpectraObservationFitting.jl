@@ -140,45 +140,45 @@ if plot_stuff
     # predict_plot = plot_spectrum(; xlim = (647, 656))  # h2o
     # predict_plot = plot_spectrum(; xlim=(651.5,652))  # h2o
     predict_plot = plot_spectrum(; title="Stellar model")
-    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 1]; label="basis 1")
-    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 2]; label="basis 2")
+    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 1] ./ norm(tf_model.star.lm.M[:, 1]); label="basis 1")
+    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 2] ./ norm(tf_model.star.lm.M[:, 2]); label="basis 2")
     plot!(tf_model.star.λ, tf_model.star.lm.μ; label="μ")
     png(predict_plot, fig_dir * "model_star_basis.png")
 
     predict_plot = plot_spectrum(; xlim=(647, 656), title="Stellar model")  # h2o
-    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 1]; label="basis 1")
-    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 2]; label="basis 2")
+    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 1] ./ norm(tf_model.star.lm.M[:, 1]); label="basis 1")
+    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 2] ./ norm(tf_model.star.lm.M[:, 2]); label="basis 2")
     plot!(tf_model.star.λ, tf_model.star.lm.μ; label="μ star")
     plot!(tf_model.tel.λ, tf_model.tel.lm.μ; label="μ tel")
     png(predict_plot, fig_dir * "model_star_basis_h2o.png")
 
     plot_scores(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "Weights", dpi = 400, kwargs...)
     predict_plot = plot_scores(; title="Stellar model")
-    scatter!(times_nu, tf_model.star.lm.s[1, :]; label="weights 1")
-    scatter!(times_nu, tf_model.star.lm.s[2, :]; label="weights 2")
+    scatter!(times_nu, tf_model.star.lm.s[1, :] .* norm(tf_model.star.lm.M[:, 1]); label="weights 1")
+    scatter!(times_nu, tf_model.star.lm.s[2, :] .* norm(tf_model.star.lm.M[:, 2]); label="weights 2")
     png(predict_plot, fig_dir * "model_star_weights.png")
 
     predict_plot = plot_spectrum(; title="Telluric model")
-    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 1]; label="basis 1")
-    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,2]; label="basis 2")
+    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 1] ./ norm(tf_model.tel.lm.M[:, 1]); label="basis 1")
+    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 2] ./ norm(tf_model.tel.lm.M[:, 2]); label="basis 2")
     plot!(tf_model.tel.λ, tf_model.tel.lm.μ; label="μ")
     png(predict_plot, fig_dir * "model_tel_basis.png")
 
     predict_plot = plot_spectrum(;xlim=(647, 656), title="Telluric model (H2O)")  # h2o
-    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,1]; label="basis 1")
-    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,2]; label="basis 2")
+    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,1] ./ norm(tf_model.tel.lm.M[:, 1]); label="basis 1")
+    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,2] ./ norm(tf_model.tel.lm.M[:, 2]); label="basis 2")
     plot!(tf_model.tel.λ, tf_model.tel.lm.μ; label="μ")
     png(predict_plot, fig_dir * "model_tel_basis_h2o.png")
     predict_plot = plot_spectrum(;xlim=(627.8,628.3), title="Telluric model (O2)")  # o2
-    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,1]; label="basis 1")
-    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,2]; label="basis 2")
+    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,1] ./ norm(tf_model.tel.lm.M[:, 1]); label="basis 1")
+    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:,2] ./ norm(tf_model.tel.lm.M[:, 2]); label="basis 2")
     plot!(tf_model.tel.λ, tf_model.tel.lm.μ; label="μ")
     png(predict_plot, fig_dir * "model_tel_basis_o2.png")
 
     predict_plot = plot_scores(; title="Telluric model")
-    scatter!(times_nu, tf_model.tel.lm.s[1, :]; label="weights 1")
-    scatter!(times_nu, tf_model.tel.lm.s[2, :]; label="weights 2")
-    scatter!(times_nu, airmasses .- 3; label="airmasses")
+    scatter!(times_nu, tf_model.tel.lm.s[1, :] .* norm(tf_model.tel.lm.M[:, 1]); label="weights 1")
+    scatter!(times_nu, tf_model.tel.lm.s[2, :] .* norm(tf_model.tel.lm.M[:, 2]); label="weights 2")
+    scatter!(times_nu, airmasses; label="airmasses")
     png(predict_plot, fig_dir * "model_tel_weights.png")
 end
 
