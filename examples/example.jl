@@ -7,9 +7,9 @@ using JLD2
 using Statistics
 import telfitting; tf = telfitting
 
-plot_stuff=true
+plot_stuff = true
 use_telstar = true
-improve_regularization = true
+improve_regularization = false
 
 ## Setting up necessary variables and functions
 
@@ -26,11 +26,14 @@ else
     tf_model.reg_tel[:L1_μ₊_factor] = 2
     tf_model.reg_tel[:L2_M] = 1e7
     tf_model.reg_tel[:L1_M] = 1e5
+    tf_model.reg_tel[:shared_M] = 0.
+
     tf_model.reg_star[:L2_μ] = 1e6
     tf_model.reg_star[:L1_μ] = 1e-1
     tf_model.reg_star[:L1_μ₊_factor] = 2
     tf_model.reg_star[:L2_M] = 1e11
     tf_model.reg_star[:L1_M] = 1e7
+    tf_model.reg_star[:shared_M] = 0.
 end
 
 tf_output = tf.TFOutput(tf_model)
@@ -95,7 +98,7 @@ plot(0:tracker, losses; xlabel="iter", ylabel="loss", legend=false)
 
 ## Plots
 
-plot_stuff = true
+using LinearAlgebra
 
 if plot_stuff
 
@@ -104,19 +107,19 @@ if plot_stuff
     # Compare first guess at RVs to true signal
     predict_plot = plot_rv()
     plot!(predict_plot, plot_times .% planet_P_nu, plot_rvs_kep, st=:line, color=:red, lw=1, label="Injected Keplerian")
-    # plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
+    plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
     png(predict_plot, fig_dir * "model_0_phase.png")
 
     # Compare RV differences to actual RVs from activity
     predict_plot = plot_rv()
     plot!(predict_plot, times_nu, rvs_activ_noisy, st=:scatter, ms=3, color=:red, label="Activity (with obs. SNR and resolution)")
-    # plot!(predict_plot, times_nu, rvs_naive - rvs_kep_nu, st=:scatter, ms=3, color=:blue, label="Before model")
+    plot!(predict_plot, times_nu, rvs_naive - rvs_kep_nu, st=:scatter, ms=3, color=:blue, label="Before model")
     png(predict_plot, fig_dir * "model_0.png")
 
     # Compare second guess at RVs to true signal
     predict_plot = plot_rv()
     plot!(predict_plot, plot_times .% planet_P_nu, plot_rvs_kep, st=:line, color=:red, lw=1, label="Injected Keplerian")
-    # plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
+    plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
     plot!(predict_plot, times_nu .% planet_P_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
     png(predict_plot, fig_dir * "model_1_phase.png")
 
@@ -129,7 +132,7 @@ if plot_stuff
     # Compare second guess at RVs to true signal
     predict_plot = plot_rv()
     plot!(predict_plot, plot_times .% planet_P_nu, plot_rvs_kep, st=:line, color=:red, lw=1, label="Injected Keplerian")
-    # plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
+    plot!(predict_plot, times_nu .% planet_P_nu, rvs_naive, st=:scatter, ms=3, color=:blue, label="Before model")
     plot!(predict_plot, times_nu .% planet_P_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
     plot!(predict_plot, times_nu .% planet_P_nu, rvs_notel_opt, st=:scatter, ms=3, color=:darkgreen, label="After optimization")
     png(predict_plot, fig_dir * "model_2_phase.png")
