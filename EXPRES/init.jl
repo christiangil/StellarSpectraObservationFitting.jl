@@ -11,7 +11,7 @@ Pkg.instantiate()
 # Pkg.develop(;path="C:/Users/chris/Dropbox/GP_research/julia/telfitting")
 
 stars = ["10700", "26965"]
-star = stars[2]
+star = stars[1]
 
 using RvSpectMLBase, RvSpectML
 using EchelleInstruments, EchelleInstruments.EXPRES
@@ -33,7 +33,6 @@ if need_to(pipeline_plan,:read_spectra)
     # Reading in customized parameters from param.jl.
     eval(code_to_include_param_jl(paths_to_search=paths_to_search_for_param))
     # Reading in FITS files
-
     all_spectra = Spectra2DExtended[]
     for j in 1:size(masks, 1)
         row = eachrow(df_files_use)[j]
@@ -75,8 +74,7 @@ airmasses = [parse(Float64, md[:airmass]) for md in pipeline_plan.cache[:extract
 ## Switching to my data format
 
 using JLD2
-import telfitting
-tf = telfitting
+import telfitting; tf = telfitting
 
 obs_resolution = 150000
 desired_order = 50

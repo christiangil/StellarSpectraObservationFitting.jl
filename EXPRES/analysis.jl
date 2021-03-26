@@ -8,7 +8,7 @@ using Statistics
 import telfitting; tf = telfitting
 
 stars = ["10700", "26965"]
-star = stars[2]
+star = stars[1]
 plot_stuff = true
 use_telstar = true
 improve_regularization = true
@@ -16,28 +16,7 @@ improve_regularization = true
 ## Setting up necessary variables and functions
 
 @load "C:/Users/chris/OneDrive/Desktop/telfitting/" * star * ".jld2" tf_model n_obs tf_data rvs_notel
-if improve_regularization
-    using StatsBase
-    n_obs_train = Int(round(0.75 * n_obs))
-    training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
-    tf.fit_regularization!(tf_model, tf_data, training_inds; use_telstar=use_telstar)
-    println(tf_model.reg_tel)
-    println(tf_model.reg_star)
-elseif use_telstar
-    tf_model.reg_tel[:L2_μ] = 1e8
-    tf_model.reg_tel[:L1_μ] = 1e5
-    tf_model.reg_tel[:L1_μ₊_factor] = 8.6
-    tf_model.reg_tel[:shared_M] = 1e9
-    tf_model.reg_tel[:L2_M] = 1e9
-    tf_model.reg_tel[:L1_M] = 1e6
 
-    tf_model.reg_star[:L2_μ] = 1e5
-    tf_model.reg_star[:L1_μ] = 1e5
-    tf_model.reg_star[:L1_μ₊_factor] = 8.6
-    tf_model.reg_star[:shared_M] = 1e9
-    tf_model.reg_star[:L2_M] = 1e8
-    tf_model.reg_star[:L1_M] = 1e9
-end
 tf_output = tf.TFOutput(tf_model)
 
 if use_telstar
@@ -74,6 +53,29 @@ losses = [loss()]
 tracker = 0
 println("guess $tracker, std=$(round(std(rvs_notel), digits=5))")
 rvs_notel_opt = copy(rvs_notel)
+
+if improve_regularization
+    using StatsBase
+    n_obs_train = Int(round(0.75 * n_obs))
+    training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
+    tf.fit_regularization!(tf_model, tf_data, training_inds; use_telstar=use_telstar)
+    println(tf_model.reg_tel)
+    println(tf_model.reg_star)
+elseif use_telstar
+    tf_model.reg_tel[:L2_μ] = 1e8
+    tf_model.reg_tel[:L1_μ] = 1e5
+    tf_model.reg_tel[:L1_μ₊_factor] = 8.6
+    tf_model.reg_tel[:shared_M] = 1e9
+    tf_model.reg_tel[:L2_M] = 1e9
+    tf_model.reg_tel[:L1_M] = 1e6
+
+    tf_model.reg_star[:L2_μ] = 1e5
+    tf_model.reg_star[:L1_μ] = 1e5
+    tf_model.reg_star[:L1_μ₊_factor] = 8.6
+    tf_model.reg_star[:shared_M] = 1e9
+    tf_model.reg_star[:L2_M] = 1e8
+    tf_model.reg_star[:L1_M] = 1e9
+end
 
 @time for i in 1:8
     tf.train_TFModel!(tf_workspace)
