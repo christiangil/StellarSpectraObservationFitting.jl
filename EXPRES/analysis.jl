@@ -24,18 +24,19 @@ if improve_regularization
     println(tf_model.reg_tel)
     println(tf_model.reg_star)
 elseif use_telstar
-    tf_model.reg_tel[:L2_μ] = 1e6
+    tf_model.reg_tel[:L2_μ] = 1e8
     tf_model.reg_tel[:L1_μ] = 1e5
-    tf_model.reg_tel[:L1_μ₊_factor] = 10
-    tf_model.reg_tel[:shared_M] = 1e-6
-    tf_model.reg_tel[:L2_M] = 1e8
+    tf_model.reg_tel[:L1_μ₊_factor] = 8.6
+    tf_model.reg_tel[:shared_M] = 1e9
+    tf_model.reg_tel[:L2_M] = 1e9
     tf_model.reg_tel[:L1_M] = 1e6
+
     tf_model.reg_star[:L2_μ] = 1e5
     tf_model.reg_star[:L1_μ] = 1e5
-    tf_model.reg_star[:L1_μ₊_factor] = 2.4
-    tf_model.reg_star[:shared_M] = 1e7
-    tf_model.reg_star[:L2_M] = 1e7
-    tf_model.reg_star[:L1_M] = 1e6
+    tf_model.reg_star[:L1_μ₊_factor] = 8.6
+    tf_model.reg_star[:shared_M] = 1e9
+    tf_model.reg_star[:L2_M] = 1e8
+    tf_model.reg_star[:L1_M] = 1e9
 end
 tf_output = tf.TFOutput(tf_model)
 
