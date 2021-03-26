@@ -16,25 +16,27 @@ improve_regularization = true
 ## Setting up necessary variables and functions
 
 @load "C:/Users/chris/OneDrive/Desktop/telfitting/" * star * ".jld2" tf_model n_obs tf_data rvs_notel
-
 if improve_regularization
     using StatsBase
     n_obs_train = Int(round(0.75 * n_obs))
     training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
     tf.fit_regularization!(tf_model, tf_data, training_inds; use_telstar=use_telstar)
+    println(tf_model.reg_tel)
+    println(tf_model.reg_star)
 elseif use_telstar
-    tf_model.reg_tel[:L2_μ] = 1e4
-    tf_model.reg_tel[:L1_μ] = 1e3
-    tf_model.reg_tel[:L1_μ₊_factor] = 2
-    tf_model.reg_tel[:L2_M] = 1e7
-    tf_model.reg_tel[:L1_M] = 1e4
-    tf_model.reg_star[:L2_μ] = 1e3
-    tf_model.reg_star[:L1_μ] = 1e-1
+    tf_model.reg_tel[:L2_μ] = 1e6
+    tf_model.reg_tel[:L1_μ] = 1e5
+    tf_model.reg_tel[:L1_μ₊_factor] = 10
+    tf_model.reg_tel[:shared_M] = 1e-6
+    tf_model.reg_tel[:L2_M] = 1e8
+    tf_model.reg_tel[:L1_M] = 1e6
+    tf_model.reg_star[:L2_μ] = 1e5
+    tf_model.reg_star[:L1_μ] = 1e5
     tf_model.reg_star[:L1_μ₊_factor] = 2.4
-    tf_model.reg_star[:L2_M] = 1e9
-    tf_model.reg_star[:L1_M] = 1e4
+    tf_model.reg_star[:shared_M] = 1e7
+    tf_model.reg_star[:L2_M] = 1e7
+    tf_model.reg_star[:L1_M] = 1e6
 end
-
 tf_output = tf.TFOutput(tf_model)
 
 if use_telstar

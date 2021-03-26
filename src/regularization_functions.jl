@@ -4,7 +4,8 @@ function eval_regularization(train::TFOptimWorkspace, test::TFOptimWorkspace, lo
     return loss_test()
 end
 
-function fit_regularization_helper!(regs::Dict{Symbol, <:Real}, reg_key::Symbol, train::TFOptimWorkspace, test::TFOptimWorkspace, loss_test::Function; test_factor::Real=10)
+function fit_regularization_helper!(regs::Dict{Symbol, <:Real}, reg_key::Symbol, train::TFOptimWorkspace, test::TFOptimWorkspace, loss_test::Function, test_factor, reg_min::Real, reg_max::Real)
+    @assert 0 < reg_min < reg_max < Inf
     ℓs = zeros(2)
     reg_hold = [1, test_factor] .* regs[reg_key]
     println("initial regularization eval")
@@ -14,7 +15,7 @@ function fit_regularization_helper!(regs::Dict{Symbol, <:Real}, reg_key::Symbol,
     ℓs[2] = eval_regularization(train, test, loss_test)
     # need to try decreasing regularization
     if ℓs[2] > ℓs[1]
-        while (ℓs[2] > ℓs[1]) && (1e-6 < reg_hold[1] < 1e12)
+        while (ℓs[2] > ℓs[1]) && (reg_min < reg_hold[1] < reg_max)
             println("trying a lower regularization")
             ℓs[2] = ℓs[1]
             reg_hold ./= test_factor
@@ -24,7 +25,7 @@ function fit_regularization_helper!(regs::Dict{Symbol, <:Real}, reg_key::Symbol,
         regs[reg_key] = reg_hold[2]
     # need to try increasing regularization
     else
-        while (ℓs[1] > ℓs[2]) && (1e-6 < reg_hold[2] < 1e12)
+        while (ℓs[1] > ℓs[2]) && (reg_min < reg_hold[2] < reg_max)
             println("trying a higher regularization")
             ℓs[1] = ℓs[2]
             reg_hold .*= test_factor
@@ -63,16 +64,19 @@ function fit_regularization!(tfm::TFModel, tfd::TFData, training_inds::AbstractV
     check_for_valid_regularization(tfm.reg_tel)
     check_for_valid_regularization(tfm.reg_star)
     for key in [:L2_μ, :L1_μ, :L1_μ₊_factor, :shared_M, :L2_M, :L1_M]
-        key == :L1_μ₊_factor ? test_factor = 1.2 : test_factor = 10;
-
+        if key == :L1_μ₊_factor
+            test_factor, reg_min, reg_max = 1.2, 1e-1, 1e1
+        else
+            test_factor, reg_min, reg_max = 10, 1e-3, 1e10
+        end
         if haskey(tfm.reg_tel, key)
             println("before: reg_tel[:$key]  = $(tfm.reg_tel[key])")
-            fit_regularization_helper!(tfm.reg_tel, key, tf_workspace_train, tf_workspace_test, loss_test; test_factor=test_factor)
+            fit_regularization_helper!(tfm.reg_tel, key, tf_workspace_train, tf_workspace_test, loss_test, test_factor, reg_min, reg_max)
             println("after:  reg_tel[:$key]  = $(tfm.reg_tel[key])")
         end
         if haskey(tfm.reg_star, key)
             println("before: reg_star[:$key] = $(tfm.reg_star[key])")
-            fit_regularization_helper!(tfm.reg_star, key, tf_workspace_train, tf_workspace_test, loss_test; test_factor=test_factor)
+            fit_regularization_helper!(tfm.reg_star, key, tf_workspace_train, tf_workspace_test, loss_test, test_factor, reg_min, reg_max)
             println("after:  reg_star[:$key] = $(tfm.reg_star[key])")
         end
     end
