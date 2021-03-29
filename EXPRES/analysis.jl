@@ -65,14 +65,14 @@ elseif use_telstar
     tf_model.reg_tel[:L2_μ] = 1e8
     tf_model.reg_tel[:L1_μ] = 1e5
     tf_model.reg_tel[:L1_μ₊_factor] = 8.6
-    tf_model.reg_tel[:shared_M] = 1e9
+    delete!(tf_model.reg_tel, :shared_M)
     tf_model.reg_tel[:L2_M] = 1e9
     tf_model.reg_tel[:L1_M] = 1e6
 
     tf_model.reg_star[:L2_μ] = 1e5
     tf_model.reg_star[:L1_μ] = 1e5
     tf_model.reg_star[:L1_μ₊_factor] = 8.6
-    tf_model.reg_star[:shared_M] = 1e9
+    delete!(tf_model.reg_star, :shared_M)
     tf_model.reg_star[:L2_M] = 1e8
     tf_model.reg_star[:L1_M] = 1e9
 end
@@ -101,17 +101,17 @@ if plot_stuff
 
     fig_dir = "EXPRES/figs/" * star * "_"
 
-    # Compare RV differences to actual RVs from activity
-    predict_plot = plot_rv()
-    plot!(predict_plot, times_nu, rvs_naive, st=:scatter, ms=3, color=:red, label="Naive")
-    plot!(predict_plot, times_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
-    png(predict_plot, fig_dir * "model_1.png")
+    # # Compare RV differences to actual RVs from activity
+    # predict_plot = plot_rv()
+    # plot!(predict_plot, times_nu, rvs_naive, st=:scatter, ms=3, color=:red, label="Naive")
+    # plot!(predict_plot, times_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
+    # png(predict_plot, fig_dir * "model_1.png")
 
     # Compare RV differences to actual RVs from activity
     predict_plot = plot_rv()
-    plot!(predict_plot, times_nu, rvs_naive, st=:scatter, ms=3, color=:red, label="Naive")
-    plot!(predict_plot, times_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
-    plot!(predict_plot, times_nu, rvs_notel_opt, st=:scatter, ms=3, color=:darkgreen, label="After optimization")
+    plot!(predict_plot, times_nu, rvs_naive, st=:scatter, ms=3, color=:red, label="Naive, std: $(round(std(rvs_naive), digits=3))")
+    plot!(predict_plot, times_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization, std: $(round(std(rvs_notel), digits=3))")
+    plot!(predict_plot, times_nu, rvs_notel_opt, st=:scatter, ms=3, color=:darkgreen, label="After optimization, std: $(round(std(rvs_notel_opt), digits=3))")
     png(predict_plot, fig_dir * "model_2.png")
 
     predict_plot = plot_spectrum(; title="Stellar model")
