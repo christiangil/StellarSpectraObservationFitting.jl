@@ -17,7 +17,7 @@ import telfitting; tf = telfitting
 ## Loading (pregenerated) data
 
 include("data_structs.jl")
-@load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" Spectra obs_resolution
+@load "E:/telfitting/telfitting_workspace_smol_150k.jld2" Spectra obs_resolution
 
 ## Setting up necessary variables and functions
 
@@ -44,4 +44,4 @@ tel_model_res = sqrt(2) * obs_resolution
 
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, tf_data; use_gp=true)
 
-@save "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k.jld2" tf_model n_obs tf_data rvs_notel rvs_naive
+@save "E:/telfitting/tf_model_150k.jld2" tf_model n_obs tf_data rvs_notel rvs_naive

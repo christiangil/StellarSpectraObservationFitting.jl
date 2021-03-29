@@ -8,14 +8,14 @@ using Statistics
 import telfitting; tf = telfitting
 
 stars = ["10700", "26965"]
-star = stars[1]
+star = stars[2]
 plot_stuff = true
 use_telstar = true
-improve_regularization = true
+improve_regularization = false
 
 ## Setting up necessary variables and functions
 
-@load "C:/Users/chris/OneDrive/Desktop/telfitting/" * star * ".jld2" tf_model n_obs tf_data rvs_notel
+@load "E:/telfitting/" * star * ".jld2" tf_model n_obs tf_data rvs_notel
 
 tf_output = tf.TFOutput(tf_model)
 
@@ -27,7 +27,7 @@ end
 
 using Plots
 if plot_stuff
-    @load "C:/Users/chris/OneDrive/Desktop/telfitting/" * star * ".jld2" rvs_naive airmasses times_nu
+    @load "E:/telfitting/" * star * ".jld2" rvs_naive airmasses times_nu
 
     plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (Å)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
     plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
@@ -65,16 +65,16 @@ elseif use_telstar
     tf_model.reg_tel[:L2_μ] = 1e8
     tf_model.reg_tel[:L1_μ] = 1e5
     tf_model.reg_tel[:L1_μ₊_factor] = 8.6
-    delete!(tf_model.reg_tel, :shared_M)
     tf_model.reg_tel[:L2_M] = 1e9
     tf_model.reg_tel[:L1_M] = 1e6
+    delete!(tf_model.reg_tel, :shared_M)
 
     tf_model.reg_star[:L2_μ] = 1e5
     tf_model.reg_star[:L1_μ] = 1e5
     tf_model.reg_star[:L1_μ₊_factor] = 8.6
-    delete!(tf_model.reg_star, :shared_M)
     tf_model.reg_star[:L2_M] = 1e8
     tf_model.reg_star[:L1_M] = 1e9
+    delete!(tf_model.reg_star, :shared_M)
 end
 
 @time for i in 1:8

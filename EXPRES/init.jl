@@ -21,7 +21,7 @@ target_subdir = star * "/"   # USER: Replace with directory of your choice
 fits_target_str = star
 paths_to_search_for_param = ["EXPRES"]
 
-expres_data_path = "C:/Users/chris/OneDrive/Desktop/telfitting/"
+expres_data_path = "E:/telfitting/"
 
 # NOTE: make_manifest does not update its paths_to_search when default_paths_to_search is defined here, so if you change the line above, you must also include "paths_to_search=default_paths_to_search" in the make_manifest() function call below
 pipeline_plan = PipelinePlan()
@@ -68,7 +68,7 @@ order_list_timeseries = extract_orders(all_spectra,pipeline_plan; orders_to_use=
 times_nu = pipeline_plan.cache[:extract_orders].times
 airmasses = [parse(Float64, md[:airmass]) for md in pipeline_plan.cache[:extract_orders].metadata]
 
-# @save "C:/Users/chris/OneDrive/Desktop/test.jld2" order_list_timeseries
+# @save "E:/test.jld2" order_list_timeseries
 # pipeline_plan.cache[:extract_orders] == order_list_timeseries
 
 ## Switching to my data format
@@ -105,4 +105,4 @@ tel_model_res = 2 * sqrt(2) * obs_resolution
 
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, tf_data; use_gp=true)
 
-@save "C:/Users/chris/OneDrive/Desktop/telfitting/" * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
+@save "E:/telfitting/" * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses

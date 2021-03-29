@@ -13,7 +13,7 @@ improve_regularization = false
 
 ## Setting up necessary variables and functions
 
-@load "C:/Users/chris/OneDrive/Desktop/telfitting/tf_model_150k.jld2" tf_model n_obs tf_data rvs_notel rvs_naive
+@load "E:/telfitting/tf_model_150k.jld2" tf_model n_obs tf_data rvs_notel rvs_naive
 
 if improve_regularization
     using StatsBase
@@ -26,14 +26,14 @@ else
     tf_model.reg_tel[:L1_μ₊_factor] = 2
     tf_model.reg_tel[:L2_M] = 1e7
     tf_model.reg_tel[:L1_M] = 1e5
-    tf_model.reg_tel[:shared_M] = 0.
+    delete!(tf_model.reg_tel, :shared_M)
 
     tf_model.reg_star[:L2_μ] = 1e6
     tf_model.reg_star[:L1_μ] = 1e-1
     tf_model.reg_star[:L1_μ₊_factor] = 2
     tf_model.reg_star[:L2_M] = 1e11
     tf_model.reg_star[:L1_M] = 1e7
-    tf_model.reg_star[:shared_M] = 0.
+    delete!(tf_model.reg_star, :shared_M)
 end
 
 tf_output = tf.TFOutput(tf_model)
@@ -46,7 +46,7 @@ end
 
 using Plots
 if plot_stuff
-    @load "C:/Users/chris/OneDrive/Desktop/telfitting/telfitting_workspace_smol_150k.jld2" airmasses planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
+    @load "E:/telfitting/telfitting_workspace_smol_150k.jld2" airmasses planet_P_nu rvs_activ_no_noise rvs_activ_noisy rvs_kep_nu times_nu plot_times plot_rvs_kep true_tels
 
     plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (nm)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
     plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
