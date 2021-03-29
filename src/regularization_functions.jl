@@ -63,7 +63,7 @@ function fit_regularization!(tfm::TFModel, tfd::TFData, training_inds::AbstractV
     # for i in 3
     check_for_valid_regularization(tfm.reg_tel)
     check_for_valid_regularization(tfm.reg_star)
-    for key in [:L2_μ, :L1_μ, :L1_μ₊_factor, :shared_M, :L2_M, :L1_M]
+    for key in [:L2_μ, :L1_μ, :L1_μ₊_factor, :L2_M, :L1_M, :shared_M]
         if key == :L1_μ₊_factor
             test_factor, reg_min, reg_max = 1.2, 1e-1, 1e1
         else
