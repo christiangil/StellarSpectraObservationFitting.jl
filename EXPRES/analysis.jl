@@ -12,10 +12,11 @@ star = stars[2]
 plot_stuff = true
 use_telstar = true
 improve_regularization = false
+expres_data_path = "E:/telfitting/"
 
 ## Setting up necessary variables and functions
 
-@load "E:/telfitting/" * star * ".jld2" tf_model n_obs tf_data rvs_notel
+@load expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_notel
 
 tf_output = tf.TFOutput(tf_model)
 
@@ -27,7 +28,7 @@ end
 
 using Plots
 if plot_stuff
-    @load "E:/telfitting/" * star * ".jld2" rvs_naive airmasses times_nu
+    @load expres_data_path * star * ".jld2" rvs_naive airmasses times_nu
 
     plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (Å)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
     plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)

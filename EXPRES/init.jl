@@ -68,9 +68,6 @@ order_list_timeseries = extract_orders(all_spectra,pipeline_plan; orders_to_use=
 times_nu = pipeline_plan.cache[:extract_orders].times
 airmasses = [parse(Float64, md[:airmass]) for md in pipeline_plan.cache[:extract_orders].metadata]
 
-# @save "E:/test.jld2" order_list_timeseries
-# pipeline_plan.cache[:extract_orders] == order_list_timeseries
-
 ## Switching to my data format
 
 using JLD2
@@ -105,4 +102,4 @@ tel_model_res = 2 * sqrt(2) * obs_resolution
 
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, tf_data; use_gp=true)
 
-@save "E:/telfitting/" * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
+@save expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
