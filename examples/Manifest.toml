@@ -6,12 +6,6 @@ git-tree-sha1 = "485ee0867925449198280d4af84bdb46a2a404d0"
 uuid = "621f4979-c628-5d54-868e-fcf4e3e8185c"
 version = "1.0.1"
 
-[[AbstractGPs]]
-deps = ["ChainRulesCore", "Distributions", "FillArrays", "KernelFunctions", "LinearAlgebra", "Random", "RecipesBase", "Reexport", "Statistics"]
-git-tree-sha1 = "50814a80527d4f4f4ebf35c06da2ef3f691ff808"
-uuid = "99985d1d-32ba-4be9-9821-2ec096f28918"
-version = "0.2.24"
-
 [[AbstractTrees]]
 git-tree-sha1 = "03e0550477d86222521d254b741d470ba17ea0b5"
 uuid = "1520ce14-60c1-5f80-bbc7-55ef81b5835c"
@@ -52,9 +46,9 @@ uuid = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
 
 [[BlockArrays]]
 deps = ["ArrayLayouts", "FillArrays", "LinearAlgebra"]
-git-tree-sha1 = "8ecf08b50d71b3fcf3272ee935b3eda653bad5bb"
+git-tree-sha1 = "a048ffafcf6eb52a1f59e32ea7d9e74419736a17"
 uuid = "8e7c35d0-a365-5155-bbbb-fb81a777f24e"
-version = "0.15.2"
+version = "0.14.5"
 
 [[BlockDiagonals]]
 deps = ["ChainRulesCore", "FillArrays", "FiniteDifferences", "LinearAlgebra"]
@@ -258,9 +252,9 @@ version = "0.8.4"
 
 [[Flux]]
 deps = ["AbstractTrees", "Adapt", "CUDA", "CodecZlib", "Colors", "DelimitedFiles", "Functors", "Juno", "LinearAlgebra", "MacroTools", "NNlib", "Pkg", "Printf", "Random", "Reexport", "SHA", "Statistics", "StatsBase", "Test", "ZipFile", "Zygote"]
-git-tree-sha1 = "c443bf5a8329573a68364106b2c29bb6938dc6f5"
+git-tree-sha1 = "fb1be4429e66b65e2e8481ab62e81a45fb7bccba"
 uuid = "587475ba-b771-5e3f-ad9e-33799f191a9c"
-version = "0.11.6"
+version = "0.12.0"
 
 [[Fontconfig_jll]]
 deps = ["Artifacts", "Bzip2_jll", "Expat_jll", "FreeType2_jll", "JLLWrappers", "Libdl", "Libuuid_jll", "Pkg", "Zlib_jll"]
@@ -294,9 +288,9 @@ version = "1.0.5+6"
 
 [[Functors]]
 deps = ["MacroTools"]
-git-tree-sha1 = "f40adc6422f548176bb4351ebd29e4abf773040a"
+git-tree-sha1 = "a7bb2af991c43dcf5c3455d276dd83976799634f"
 uuid = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
-version = "0.1.0"
+version = "0.2.1"
 
 [[GLFW_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Libglvnd_jll", "Pkg", "Xorg_libXcursor_jll", "Xorg_libXi_jll", "Xorg_libXinerama_jll", "Xorg_libXrandr_jll"]
@@ -416,12 +410,6 @@ deps = ["Base64", "Logging", "Media", "Profile"]
 git-tree-sha1 = "07cb43290a840908a771552911a6274bc6c072c7"
 uuid = "e5e0dc1b-0480-54bc-9374-aad01c23163d"
 version = "0.8.4"
-
-[[KernelFunctions]]
-deps = ["ChainRulesCore", "Compat", "Distances", "Functors", "LinearAlgebra", "Random", "Requires", "SpecialFunctions", "StatsBase", "StatsFuns", "TensorCore", "Test", "ZygoteRules"]
-git-tree-sha1 = "c1ae17a1acbb80a847927b69a2a4b1ea087f45f9"
-uuid = "ec8451be-7e33-11e9-00cf-bbf324bd1392"
-version = "0.9.1"
 
 [[LAME_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -821,10 +809,10 @@ uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 version = "0.9.7"
 
 [[Stheno]]
-deps = ["AbstractGPs", "BlockArrays", "ChainRulesCore", "Distributions", "FillArrays", "KernelFunctions", "LinearAlgebra", "MacroTools", "Random", "Reexport", "Requires", "Statistics", "Zygote", "ZygoteRules"]
-git-tree-sha1 = "7e3bb15dd31d6a462dbaaba44928be2be745129b"
+deps = ["BlockArrays", "ChainRulesCore", "Distances", "Distributions", "FillArrays", "LinearAlgebra", "MacroTools", "Random", "RecipesBase", "Requires", "Statistics", "Zygote", "ZygoteRules"]
+git-tree-sha1 = "3edd166ca49e0522257b4d19adb43e4342af9bc5"
 uuid = "8188c328-b5d6-583d-959b-9690869a5511"
-version = "0.7.0"
+version = "0.6.20"
 
 [[StructArrays]]
 deps = ["Adapt", "DataAPI", "Tables"]
@@ -849,16 +837,10 @@ uuid = "bd369af6-aec1-5ad0-b16a-f7cc5008161c"
 version = "1.4.1"
 
 [[TemporalGPs]]
-deps = ["AbstractGPs", "BlockDiagonals", "ChainRulesCore", "Distributions", "FillArrays", "KernelFunctions", "LinearAlgebra", "Random", "StaticArrays", "StructArrays", "Zygote", "ZygoteRules"]
-git-tree-sha1 = "f316790ee886ecb050308ead88ef498aeb250922"
+deps = ["BlockDiagonals", "ChainRulesCore", "Distributions", "FillArrays", "LinearAlgebra", "Random", "StaticArrays", "Stheno", "StructArrays", "Zygote", "ZygoteRules"]
+git-tree-sha1 = "df8130ecf04b8e3cd644c3dff69d2df5a4240d0f"
 uuid = "e155a3c4-0841-43e1-8b83-a0e4f03cc18f"
-version = "0.5.0"
-
-[[TensorCore]]
-deps = ["LinearAlgebra"]
-git-tree-sha1 = "1feb45f88d133a655e001435632f019a9a1bcdb6"
-uuid = "62fd8b95-f654-4bbd-a8a5-9c27f68ccd50"
-version = "0.1.1"
+version = "0.4.1"
 
 [[Test]]
 deps = ["Distributed", "InteractiveUtils", "Logging", "Random"]
