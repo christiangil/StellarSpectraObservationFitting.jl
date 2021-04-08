@@ -6,10 +6,12 @@ Pkg.instantiate()
 using JLD2
 using Statistics
 import telfitting; tf = telfitting
+using Plots
 
 stars = ["10700", "26965"]
 star = stars[2]
 plot_stuff = true
+plot_stuff_fit = true
 use_telstar = true
 improve_regularization = false
 expres_data_path = "E:/telfitting/"
@@ -26,10 +28,7 @@ else
     tf_workspace, loss = tf.TFWorkspace(tf_model, tf_output, tf_data; return_loss_f=true)
 end
 
-using Plots
-if plot_stuff
-    @load expres_data_path * star * ".jld2" rvs_naive airmasses times_nu
-
+if plot_stuff_fit
     plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (Å)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
     plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
 
@@ -79,13 +78,12 @@ elseif use_telstar
 end
 
 @time for i in 1:8
-    tf.train_TFModel!(tf_workspace)
+    tf.train_TFOrderModel!(tf_workspace)
     rvs_notel_opt[:] = (tf_model.rv.lm.s .* light_speed_nu)'
 
     append!(resid_stds, [std(rvs_notel_opt)])
     append!(losses, [loss()])
-
-    status_plot(tf_output, tf_data)
+    if plot_stuff_fit; status_plot(tf_output, tf_data) end
     tracker += 1
     println("guess $tracker")
     println("loss   = $(losses[end])")
@@ -99,7 +97,7 @@ plot(0:tracker, losses; xlabel="iter", ylabel="loss", legend=false)
 using LinearAlgebra
 
 if plot_stuff
-
+    @load expres_data_path * star * ".jld2" rvs_naive airmasses times_nu
     fig_dir = "EXPRES/figs/" * star * "_"
 
     # # Compare RV differences to actual RVs from activity

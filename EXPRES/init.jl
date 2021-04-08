@@ -5,13 +5,8 @@ Pkg.instantiate()
 
 ## Importing data with Eric's code
 
-# Pkg.develop(; url="https://github.com/RvSpectML/EchelleInstruments.jl")
-# Pkg.develop(; url="https://github.com/RvSpectML/RvSpectML.jl")
-# Pkg.develop(; url="https://github.com/RvSpectML/RvSpectMLBase.jl")
-# Pkg.develop(;path="C:/Users/chris/Dropbox/GP_research/julia/telfitting")
-
 stars = ["10700", "26965"]
-star = stars[1]
+star = stars[2]
 
 using RvSpectMLBase, RvSpectML
 using EchelleInstruments, EchelleInstruments.EXPRES
@@ -56,7 +51,7 @@ if need_to(pipeline_plan,:read_spectra)
     dont_need_to!(pipeline_plan,:read_spectra)
 end
 
-inds = Vector{UnitRange}(undef, 86)
+inds = Vector{UnitRange}(undef, size(masks,2))
 for i in 1:length(inds)
     inds[i] = maximum([mask[1] for mask in masks[:, i]]):minimum([mask[end] for mask in masks[:, i]])
 end
@@ -98,7 +93,7 @@ tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
 star_model_res = 2 * sqrt(2) * obs_resolution
 tel_model_res = 2 * sqrt(2) * obs_resolution
 
-@time tf_model = tf.TFModel(tf_data, star_model_res, tel_model_res)
+@time tf_model = tf.TFOrderModel(tf_data, star_model_res, tel_model_res)
 
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, tf_data; use_gp=true)
 

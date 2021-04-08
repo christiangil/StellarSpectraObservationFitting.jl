@@ -80,7 +80,7 @@ println("guess $tracker, std=$(round(rvs_std(rvs_notel), digits=5))")
 rvs_notel_opt = copy(rvs_notel)
 
 @time for i in 1:8
-    tf.train_TFModel!(tf_workspace)
+    tf.train_TFOrderModel!(tf_workspace)
     rvs_notel_opt[:] = (tf_model.rv.lm.s .* light_speed_nu)'
 
     append!(resid_stds, [rvs_std(rvs_notel_opt)])
