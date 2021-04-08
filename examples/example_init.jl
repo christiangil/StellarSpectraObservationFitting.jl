@@ -40,7 +40,7 @@ tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
 star_model_res = 2 * sqrt(2) * obs_resolution
 tel_model_res = sqrt(2) * obs_resolution
 
-@time tf_model = tf.TFOrderModel(tf_data, star_model_res, tel_model_res)
+@time tf_model = tf.TFOrderModel(tf_data, star_model_res, tel_model_res, "SOAP", 0)
 
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, tf_data; use_gp=true)
 
