@@ -68,12 +68,10 @@ airmasses = [parse(Float64, md[:airmass]) for md in pipeline_plan.cache[:extract
 using JLD2
 import telfitting; tf = telfitting
 
+n_obs = length(all_spectra)
 obs_resolution = 150000
 desired_order = 50
-
-n_obs = length(all_spectra)
-extra_chop = 0
-mask_inds = (inds[desired_order][1] + extra_chop):(inds[desired_order][end] - extra_chop)
+mask_inds = inds[desired_order]
 
 len_obs = length(mask_inds)
 flux_obs = ones(len_obs, n_obs)
@@ -96,5 +94,40 @@ tel_model_res = 2 * sqrt(2) * obs_resolution
 @time tf_model = tf.TFOrderModel(tf_data, star_model_res, tel_model_res, "EXPRES", desired_order)
 
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, tf_data; use_gp=true)
+include("../src/_plot_functions.jl")
+plot_stellar_model_bases(tf_model)
 
-@save expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
+function proposed_new_cuts(M::AbstractVector, mask_inds::UnitRange)
+    abs_M = abs.(M)
+    # plot((1:length(abs_M)) ./ length(abs_M), sort(abs_M); xrange=(0.9,1))
+    # cdf = [sum(view(abs_M, 1:i)) for i in 1:length(abs_M)] ./ sum(abs_M)
+    # plot(cdf)
+    high_M = quantile(abs_M, 0.99)
+    half = Int(floor(length(abs_M) / 2))
+    cuts = [1, length(abs_M)]
+    cut_low = findlast((x) -> x > high_M, abs_M[1:half])
+    cut_high = findfirst((x) -> x > high_M, abs_M[(half+1):end])
+    if cut_low!=nothing; cuts[1] = cut_low + 1 end
+    if cut_high!=nothing; cuts[2] = half + cut_high - 1 end
+    return cuts
+end
+function proposed_new_inds(cuts::Vector, M::AbstractVector, mask_inds::UnitRange)
+    # println(maximum(abs_M) / high_M)
+    cuts2 = Int.(round.(length(mask_inds) .* (cuts ./ length(M))))
+    return (mask_inds[1] + cuts2[1]):(mask_inds[1] + cuts2[2])
+end
+function new_inds(M::AbstractArray, mask_inds::UnitRange)
+    possible_new_inds_tfm = [proposed_new_cuts(M[:, i], mask_inds) for i in 1:size(M, 2)]
+    possible_new_inds_mask = [proposed_new_inds(possible_new_inds_tfm[i], M[:, i], mask_inds) for i in 1:size(M, 2)]
+    return [maximum([inds[1] for inds in possible_new_inds_mask]), minimum([inds[end] for inds in possible_new_inds_mask])],
+        [maximum([inds[1] for inds in possible_new_inds_tfm]), minimum([inds[end] for inds in possible_new_inds_tfm])]
+end
+_, tfm_inds = new_inds(tf_model.star.lm.M, mask_inds)
+tf_model.star.lm.M[1:tfm_inds[1], :] .= 0
+tf_model.star.lm.M[tfm_inds[2]:end, :] .= 0
+_, tfm_inds = new_inds(tf_model.tel.lm.M, mask_inds)
+tf_model.tel.lm.M[1:tfm_inds[1], :] .= 0
+tf_model.tel.lm.M[tfm_inds[2]:end, :] .= 0
+
+plot_stellar_model_bases(tf_model)
+plot_telluric_model_bases(tf_model)
