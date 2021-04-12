@@ -94,47 +94,27 @@ plot(0:tracker, resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS"
 plot(0:tracker, losses; xlabel="iter", ylabel="loss", legend=false)
 
 ## Plots
-using LinearAlgebra
+
 
 if plot_stuff
     @load expres_data_path * star * ".jld2" rvs_naive airmasses times_nu
+    include("../src/_plot_functions.jl")
     fig_dir = "EXPRES/figs/" * star * "_"
-
-    # # Compare RV differences to actual RVs from activity
-    # predict_plot = plot_rv()
-    # plot!(predict_plot, times_nu, rvs_naive, st=:scatter, ms=3, color=:red, label="Naive")
-    # plot!(predict_plot, times_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization")
-    # png(predict_plot, fig_dir * "model_1.png")
-
+    
     # Compare RV differences to actual RVs from activity
-    predict_plot = plot_rv()
-    plot!(predict_plot, times_nu, rvs_naive, st=:scatter, ms=3, color=:red, label="Naive, std: $(round(std(rvs_naive), digits=3))")
-    plot!(predict_plot, times_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization, std: $(round(std(rvs_notel), digits=3))")
-    plot!(predict_plot, times_nu, rvs_notel_opt, st=:scatter, ms=3, color=:darkgreen, label="After optimization, std: $(round(std(rvs_notel_opt), digits=3))")
-    png(predict_plot, fig_dir * "model_2.png")
+    predict_plot = plot_model_rvs(times_nu, rvs_naive, rvs_notel, rvs_notel_opt)
+    png(predict_plot, fig_dir * "model_rvs.png")
 
-    predict_plot = plot_spectrum(; title="Stellar model")
-    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 1] ./ norm(tf_model.star.lm.M[:, 1]); label="basis 1")
-    plot!(tf_model.star.λ, tf_model.star.lm.M[:, 2] ./ norm(tf_model.star.lm.M[:, 2]); label="basis 2")
-    plot!(tf_model.star.λ, tf_model.star.lm.μ; label="μ")
+    predict_plot = plot_stellar_model_bases(tf_model)
     png(predict_plot, fig_dir * "model_star_basis.png")
 
-    plot_scores(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "Weights", dpi = 400, kwargs...)
-    predict_plot = plot_scores(; title="Stellar model")
-    scatter!(times_nu, tf_model.star.lm.s[1, :] .* norm(tf_model.star.lm.M[:, 1]); label="weights 1")
-    scatter!(times_nu, tf_model.star.lm.s[2, :] .* norm(tf_model.star.lm.M[:, 2]); label="weights 2")
+    predict_plot = plot_stellar_model_scores(tf_model)
     png(predict_plot, fig_dir * "model_star_weights.png")
 
-    predict_plot = plot_spectrum(; title="Telluric model")
-    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 1] ./ norm(tf_model.tel.lm.M[:, 1]); label="basis 1")
-    plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, 2] ./ norm(tf_model.tel.lm.M[:, 2]); label="basis 2")
-    plot!(tf_model.tel.λ, tf_model.tel.lm.μ; label="μ")
+    predict_plot = plot_telluric_model_bases(tf_model)
     png(predict_plot, fig_dir * "model_tel_basis.png")
 
-    predict_plot = plot_scores(; title="Telluric model")
-    scatter!(times_nu, tf_model.tel.lm.s[1, :] .* norm(tf_model.tel.lm.M[:, 1]); label="weights 1")
-    scatter!(times_nu, tf_model.tel.lm.s[2, :] .* norm(tf_model.tel.lm.M[:, 2]); label="weights 2")
-    scatter!(times_nu, airmasses; label="airmasses")
+    predict_plot = plot_telluric_model_scores(tf_model)
     png(predict_plot, fig_dir * "model_tel_weights.png")
 end
 
