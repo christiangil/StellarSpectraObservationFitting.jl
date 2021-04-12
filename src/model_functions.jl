@@ -210,7 +210,8 @@ end
 	TFOrderModel(tfom.tel(inds), tfom.star(inds), tfom.rv(inds), tfom.reg_tel, tfom.reg_star,
 	tfom.lih_t2b(inds, size(tfom.lih_o2t.li, 1)), tfom.lih_b2t(inds, size(tfom.lih_o2b.li, 1)),
 	tfom.lih_o2b(inds, size(tfom.lih_b2o.li, 1)), tfom.lih_b2o(inds, size(tfom.lih_o2b.li, 1)),
-	tfom.lih_t2o(inds, size(tfom.lih_o2t.li, 1)), tfom.lih_o2t(inds, size(tfom.lih_b2o.li, 1)))
+	tfom.lih_t2o(inds, size(tfom.lih_o2t.li, 1)), tfom.lih_o2t(inds, size(tfom.lih_b2o.li, 1)),
+	tfom.todo, tfom.instrument, tfom.order)
 
 tel_prior(tfom::TFOrderModel) = model_prior(tfom.tel.lm, tfom.reg_tel)
 star_prior(tfom::TFOrderModel) = model_prior(tfom.star.lm, tfom.reg_star)

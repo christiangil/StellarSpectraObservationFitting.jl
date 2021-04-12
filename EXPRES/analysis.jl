@@ -59,22 +59,8 @@ if improve_regularization
     n_obs_train = Int(round(0.75 * n_obs))
     training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
     tf.fit_regularization!(tf_model, tf_data, training_inds; use_telstar=use_telstar)
-    println(tf_model.reg_tel)
-    println(tf_model.reg_star)
-elseif use_telstar
-    tf_model.reg_tel[:L2_μ] = 1e8
-    tf_model.reg_tel[:L1_μ] = 1e5
-    tf_model.reg_tel[:L1_μ₊_factor] = 8.6
-    tf_model.reg_tel[:L2_M] = 1e9
-    tf_model.reg_tel[:L1_M] = 1e6
-    delete!(tf_model.reg_tel, :shared_M)
-
-    tf_model.reg_star[:L2_μ] = 1e5
-    tf_model.reg_star[:L1_μ] = 1e5
-    tf_model.reg_star[:L1_μ₊_factor] = 8.6
-    tf_model.reg_star[:L2_M] = 1e8
-    tf_model.reg_star[:L1_M] = 1e9
-    delete!(tf_model.reg_star, :shared_M)
+    tf_model.todo[:reg_improved] = true
+    @save expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_notel
 end
 
 @time for i in 1:8
@@ -100,7 +86,7 @@ if plot_stuff
     @load expres_data_path * star * ".jld2" rvs_naive airmasses times_nu
     include("../src/_plot_functions.jl")
     fig_dir = "EXPRES/figs/" * star * "_"
-    
+
     # Compare RV differences to actual RVs from activity
     predict_plot = plot_model_rvs(times_nu, rvs_naive, rvs_notel, rvs_notel_opt)
     png(predict_plot, fig_dir * "model_rvs.png")
