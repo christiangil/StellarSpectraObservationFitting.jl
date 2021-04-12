@@ -9,16 +9,15 @@ import telfitting; tf = telfitting
 using Plots
 
 stars = ["10700", "26965"]
-star = stars[2]
+star = stars[1]
 plot_stuff = true
 plot_stuff_fit = true
 use_telstar = true
-improve_regularization = false
 expres_data_path = "E:/telfitting/"
 
 ## Setting up necessary variables and functions
 
-@load expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_notel
+@load expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
 
 tf_output = tf.TFOutput(tf_model)
 
@@ -54,13 +53,13 @@ tracker = 0
 println("guess $tracker, std=$(round(std(rvs_notel), digits=5))")
 rvs_notel_opt = copy(rvs_notel)
 
-if improve_regularization
+if !tf_model.todo[:reg_improved]
     using StatsBase
     n_obs_train = Int(round(0.75 * n_obs))
     training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
     tf.fit_regularization!(tf_model, tf_data, training_inds; use_telstar=use_telstar)
     tf_model.todo[:reg_improved] = true
-    @save expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_notel
+    @save expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
 end
 
 @time for i in 1:8
@@ -83,7 +82,6 @@ plot(0:tracker, losses; xlabel="iter", ylabel="loss", legend=false)
 
 
 if plot_stuff
-    @load expres_data_path * star * ".jld2" rvs_naive airmasses times_nu
     include("../src/_plot_functions.jl")
     fig_dir = "EXPRES/figs/" * star * "_"
 
