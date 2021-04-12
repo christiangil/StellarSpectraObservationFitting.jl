@@ -171,7 +171,7 @@ struct TFOrderModel{T<:Number}
 		tfd::TFData,
 		star_model_res::Number,
 		tel_model_res::Number,
-		intrument::String,
+		instrument::String,
 		order::Int;
 		n_comp_tel::Int=2,
 		n_comp_star::Int=2)
@@ -197,7 +197,7 @@ struct TFOrderModel{T<:Number}
 			(:L1_μ₊_factor, 2), (:L2_M, 1e7), (:L1_M, 1e4)])
 		reg_star = Dict([(:L2_μ, 1e3), (:L1_μ, 1e-1),
 			(:L1_μ₊_factor, 2), (:L2_M, 1e7), (:L1_M, 1e6)])
-		todo = Dict([(:reg_improved, false)])
+		todo = Dict([(:reg_improved, false), (:extra_chop, false)])
         return TFOrderModel(tel, star, rv, reg_tel, reg_star, lih_t2b, lih_b2t,
 			lih_o2b, lih_b2o, lih_t2o, lih_o2t, todo, instrument, order)
     end
