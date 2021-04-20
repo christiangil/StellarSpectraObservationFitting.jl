@@ -31,7 +31,7 @@ if need_to(pipeline_plan,:read_spectra)
     all_spectra = Spectra2DExtended[]
     for j in 1:size(masks, 1)
         row = eachrow(df_files_use)[j]
-        spectra, mask = EXPRES.read_data(row; store_min_data=true, store_tellurics=true, normalization=:continuum, return_λ_obs=true, return_excalibur_mask=true)
+        spectra, mask = EXPRES.read_data(row; store_min_data=true, store_tellurics=true, normalization=:blaze, return_λ_obs=true, return_excalibur_mask=true)
         append!(all_spectra, [spectra])
         for i in 1:size(mask, 2)
             try
@@ -92,11 +92,15 @@ flux_obs = ones(len_obs, n_obs)
 var_obs = zeros(len_obs, n_obs)
 log_λ_obs = zeros(len_obs, n_obs)
 log_λ_star = zeros(len_obs, n_obs)
+continuum = ones(len_obs)
 for i in 1:n_obs # 13s
     flux_obs[:, i] = all_spectra[i].flux[mask_inds, desired_order]
     var_obs[:, i] = all_spectra[i].var[mask_inds, desired_order]
     log_λ_obs[:, i] = log.(all_spectra[i].λ_obs[mask_inds, desired_order])
     log_λ_star[:, i] = log.(all_spectra[i].λ[mask_inds, desired_order])
+    continuum[:] = fit_continuum(log_λ_obs[:, i], flux_obs[:, i], var_obs[:, i])
+    flux_obs[:, i] ./= continuum
+    var_obs[:, i] ./= continuum .* continuum
 end
 tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
 
