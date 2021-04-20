@@ -51,6 +51,16 @@ if need_to(pipeline_plan,:read_spectra)
     dont_need_to!(pipeline_plan,:read_spectra)
 end
 
+# df_files = make_manifest(expres_data_path, target_subdir, EXPRES)
+# eval(code_to_include_param_jl(paths_to_search=paths_to_search_for_param))
+# row = eachrow(df_files_use)[1]
+# spectra, mask = EXPRES.read_data(row; store_min_data=true, store_tellurics=true, normalization=:raw, return_λ_obs=true, return_excalibur_mask=true)
+# plot(spectra.flux[:, 50])
+# spectra2, mask = EXPRES.read_data(row; store_min_data=true, store_tellurics=true, normalization=:blaze, return_λ_obs=true, return_excalibur_mask=true)
+# plot(spectra2.flux[:, 50])
+# spectra3, mask = EXPRES.read_data(row; store_min_data=true, store_tellurics=true, normalization=:continuum, return_λ_obs=true, return_excalibur_mask=true)
+# plot(spectra3.flux[:, 50])
+
 inds = Vector{UnitRange}(undef, size(masks,2))
 for i in 1:length(inds)
     inds[i] = maximum([mask[1] for mask in masks[:, i]]):minimum([mask[end] for mask in masks[:, i]])
@@ -72,6 +82,10 @@ n_obs = length(all_spectra)
 obs_resolution = 150000
 desired_order = 50
 mask_inds = inds[desired_order]
+# inst = all_spectra[1].inst
+# extra_chop = 0
+# mask_inds = (min_col_default(inst, desired_order) + extra_chop):(max_col_default(inst, desired_order) - extra_chop)  # 850:6570
+# mask_inds = 2270:5150
 
 len_obs = length(mask_inds)
 flux_obs = ones(len_obs, n_obs)
@@ -86,6 +100,21 @@ for i in 1:n_obs # 13s
 end
 tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
 
+# using Plots
+# plt = plot(;xlabel="MJD", ylabel="Å", title="EXPRES wavelength calibration ($star, order $desired_order)")
+# for i in 1:10
+#     scatter!(plt, times_nu, exp.(log_λ_obs[i, :]); label="pixel $(mask_inds[i])")
+# end
+# display(plt)
+# png("obs.png")
+#
+# using Plots
+# plt = plot(;xlabel="MJD", ylabel="Å", title="EXPRES wavelength calibration ($star, order $desired_order)")
+# for i in 1:10
+#     scatter!(plt, times_nu, exp.(log_λ_star[i, :]); label="pixel $(mask_inds[i])")
+# end
+# display(plt)
+# png("bary.png")
 ## Initializing models
 
 star_model_res = 2 * sqrt(2) * obs_resolution

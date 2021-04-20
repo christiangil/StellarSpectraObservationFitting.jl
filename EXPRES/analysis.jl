@@ -78,6 +78,9 @@ end
 plot(0:tracker, resid_stds; xlabel="iter", ylabel="predicted RV - active RV RMS", legend=false)
 plot(0:tracker, losses; xlabel="iter", ylabel="loss", legend=false)
 
+plot_stellar_model_bases(tf_model)
+plot_telluric_model_bases(tf_model)
+
 ## Plots
 
 
