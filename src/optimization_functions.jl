@@ -153,8 +153,8 @@ function train_TFOrderModel!(tfow::TFWorkspaceTelStar; options::Optim.Options=Op
     tfow.tfo.rv[:, :] = rv_model(tfow.tfom)
 end
 
-function train_TFOrderModel!(tfow::TFOptimWorkspace, n::Int; options::Optim.Options=Optim.Options(iterations=10, f_tol=1e-3, g_tol=1e5))
+function train_TFOrderModel!(tfow::TFOptimWorkspace, n::Int; kwargs...)
     for i in 1:n
-        train_TFOrderModel!(tfow; options=options)
+        train_TFOrderModel!(tfow; kwargs...)
     end
 end
