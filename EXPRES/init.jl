@@ -98,7 +98,7 @@ for i in 1:n_obs # 13s
     var_obs[:, i] = all_spectra[i].var[mask_inds, desired_order]
     log_λ_obs[:, i] = log.(all_spectra[i].λ_obs[mask_inds, desired_order])
     log_λ_star[:, i] = log.(all_spectra[i].λ[mask_inds, desired_order])
-    continuum[:] = fit_continuum(log_λ_obs[:, i], flux_obs[:, i], var_obs[:, i])
+    continuum[:] = tf.fit_continuum(log_λ_obs[:, i], flux_obs[:, i], var_obs[:, i])
     flux_obs[:, i] ./= continuum
     var_obs[:, i] ./= continuum .* continuum
 end
