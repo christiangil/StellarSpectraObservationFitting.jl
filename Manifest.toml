@@ -222,6 +222,16 @@ git-tree-sha1 = "a7bb2af991c43dcf5c3455d276dd83976799634f"
 uuid = "d9f16b24-f501-4c13-a1f2-28368ffc5196"
 version = "0.2.1"
 
+[[GMP_jll]]
+deps = ["Artifacts", "Libdl"]
+uuid = "781609d7-10c4-51f6-84f2-b8444358ff6d"
+
+[[GPLinearODEMaker]]
+deps = ["Distributed", "IterativeSolvers", "LinearAlgebra", "Random", "SharedArrays", "SpecialFunctions", "Statistics", "SymEngine"]
+git-tree-sha1 = "03fcdba37c9e3ea28809fdd0232be4cc5b7c6cb5"
+uuid = "27ef9b34-1325-4cec-ba33-00f2f4637873"
+version = "0.1.8"
+
 [[GPUArrays]]
 deps = ["AbstractFFTs", "Adapt", "LinearAlgebra", "Printf", "Random", "Serialization"]
 git-tree-sha1 = "39131b2105e1990dd5e680232c2860181f998c17"
@@ -248,6 +258,12 @@ version = "0.1.0"
 [[InteractiveUtils]]
 deps = ["Markdown"]
 uuid = "b77e0a4c-d291-57a0-90e8-8db25a27a240"
+
+[[IterativeSolvers]]
+deps = ["LinearAlgebra", "Printf", "Random", "RecipesBase", "SparseArrays"]
+git-tree-sha1 = "6f5ef3206d9dc6510a8b8e2334b96454a2ade590"
+uuid = "42fd0dbc-a981-5370-80f2-aaf504508153"
+version = "0.9.0"
 
 [[IteratorInterfaceExtensions]]
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
@@ -306,6 +322,16 @@ uuid = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 
 [[Logging]]
 uuid = "56ddb016-857b-54e1-b83d-db4d58db5568"
+
+[[MPC_jll]]
+deps = ["GMP_jll", "Libdl", "MPFR_jll", "Pkg"]
+git-tree-sha1 = "583d9bc863ad491571369212b9a8047219a0015d"
+uuid = "2ce0c516-f11f-5db3-98ad-e0e1048fbd70"
+version = "1.1.0+0"
+
+[[MPFR_jll]]
+deps = ["Artifacts", "GMP_jll", "Libdl"]
+uuid = "3a97d323-0669-5f0c-9066-3539efd106a3"
 
 [[MacroTools]]
 deps = ["Markdown", "Random"]
@@ -538,6 +564,18 @@ version = "0.5.1"
 [[SuiteSparse]]
 deps = ["Libdl", "LinearAlgebra", "Serialization", "SparseArrays"]
 uuid = "4607b0f0-06f3-5cda-b6b1-a6196a1729e9"
+
+[[SymEngine]]
+deps = ["Compat", "Libdl", "LinearAlgebra", "RecipesBase", "SpecialFunctions", "SymEngine_jll"]
+git-tree-sha1 = "a27a507f5092a77b0619721c6f852a5f634fc52f"
+uuid = "123dc426-2d89-5057-bbad-38513e3affd8"
+version = "0.8.3"
+
+[[SymEngine_jll]]
+deps = ["GMP_jll", "Libdl", "MPC_jll", "MPFR_jll", "Pkg"]
+git-tree-sha1 = "4dacada8e05ac49eb768219f8d02bc6b608627fb"
+uuid = "3428059b-622b-5399-b16f-d347a77089a4"
+version = "0.6.0+1"
 
 [[TOML]]
 deps = ["Dates"]
