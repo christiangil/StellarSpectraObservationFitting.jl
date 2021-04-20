@@ -25,7 +25,7 @@ function general_lst_sq(
     return (dm' * (Σ \ dm)) \ (dm' * (Σ \ data))
 end
 
-function fit_continuum(x::Vector, y::Vector, σ²::Vector; order=6, nsigma=[0.3,3.0], maxniter=50)
+function fit_continuum(x::Vector, y::Vector, σ²::Vector; order::Int=6, nsigma::Vector{<:Real}=[0.3,3.0], maxniter::Int=50, plot_stuff::Bool=false)
     """Fit the continuum using sigma clipping
     Args:
         x: The wavelengths
@@ -37,19 +37,21 @@ function fit_continuum(x::Vector, y::Vector, σ²::Vector; order=6, nsigma=[0.3,
     Returns:
         The value of the continuum at the wavelengths in x
     """
+    @assert 0 <= order < length(x)
+    @assert length(x) == length(y) == length(σ²)
+    @assert length(nsigma) == 2
+
     A = vander(x .- mean(x), order)
     m = fill(true, length(x))
+    μ = ones(length(x))
     for i in 1:maxniter
         m[σ² .== Inf] .= false  # mask out the bad pixels
         w = general_lst_sq(A[m, :], y[m], σ²[m])
-        μ = A * w
+        μ[:] = A * w
         resid = y - μ
         sigma = median(abs.(resid))
         m_new = (-nsigma[1]*sigma) .< resid .< (nsigma[2]*sigma)
-        if sum(m) == sum(m_new)
-            m = m_new
-            break
-        end
+        if sum(m) == sum(m_new); break end
         m = m_new
     end
     return μ
