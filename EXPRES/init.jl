@@ -92,19 +92,20 @@ flux_obs = ones(len_obs, n_obs)
 var_obs = zeros(len_obs, n_obs)
 log_λ_obs = zeros(len_obs, n_obs)
 log_λ_star = zeros(len_obs, n_obs)
-continuum = ones(len_obs)
 for i in 1:n_obs # 13s
     flux_obs[:, i] = all_spectra[i].flux[mask_inds, desired_order]
     var_obs[:, i] = all_spectra[i].var[mask_inds, desired_order]
     log_λ_obs[:, i] = log.(all_spectra[i].λ_obs[mask_inds, desired_order])
     log_λ_star[:, i] = log.(all_spectra[i].λ[mask_inds, desired_order])
-    continuum[:] = tf.fit_continuum(log_λ_obs[:, i], flux_obs[:, i], var_obs[:, i])
-    flux_obs[:, i] ./= continuum
-    var_obs[:, i] ./= continuum .* continuum
 end
 tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
+@time tf.process!(tf_data)
 
 # using Plots
+#
+# snr = sqrt.(tf_data.flux.^2 ./ tf_data.var)
+# heatmap(snr)
+#
 # plt = plot(;xlabel="MJD", ylabel="Å", title="EXPRES wavelength calibration ($star, order $desired_order)")
 # for i in 1:10
 #     scatter!(plt, times_nu, exp.(log_λ_obs[i, :]); label="pixel $(mask_inds[i])")
@@ -119,6 +120,7 @@ tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
 # end
 # display(plt)
 # png("bary.png")
+
 ## Initializing models
 
 star_model_res = 2 * sqrt(2) * obs_resolution
