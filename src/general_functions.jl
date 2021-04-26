@@ -33,11 +33,11 @@ function clip_vector!(vec::Vector; max::Number=Inf, min::Number=-Inf)
 	vec[vec .> max] .= max
 end
 
-function make_template(matrix::Matrix; use_mean::Bool=true, kwargs...)
+function make_template(matrix::Matrix; use_mean::Bool=false, kwargs...)
 	if use_mean
-		result = vec(median(matrix, dims=2))
-	else
 		result = vec(mean(matrix, dims=2))
+	else
+		result = vec(median(matrix, dims=2))
 	end
 	clip_vector!(result; kwargs...)
 	return result
