@@ -61,7 +61,7 @@ end
 modified code shamelessly stolen from RvSpectraKitLearn.jl/src/generalized_pca.jl
 Compute first num_components basis vectors for PCA, after subtracting projection onto fixed_comp
 """
-function fit_gen_pca_rv_RVSKL(X::Matrix{T}, fixed_comp::Vector{T}; mu::Vector{T}=vec(mean(X, dims=2)), num_components::Integer=4, tol::Float64=1e-12, max_it::Int64=20) where {T<:Real}
+function fit_gen_pca_rv_RVSKL(X::Matrix{T}, fixed_comp::Vector{T}; mu::Vector{T}=vec(mean(X, dims=2)), num_components::Integer=3, tol::Float64=1e-12, max_it::Int64=20) where {T<:Real}
 
 	# initializing relevant quantities
 	num_lambda = size(X, 1)
@@ -102,7 +102,7 @@ function fit_gen_pca_rv_RVSKL(X::Matrix{T}, fixed_comp::Vector{T}; mu::Vector{T}
 end
 
 
-function fit_gen_pca(X::Matrix{T}; mu::Vector{T}=vec(mean(X, dims=2)), num_components::Integer=4, tol::Float64=1e-12, max_it::Int64=20) where {T<:Real}
+function fit_gen_pca(X::Matrix{T}; mu::Vector{T}=vec(mean(X, dims=2)), num_components::Integer=2, tol::Float64=1e-12, max_it::Int64=20) where {T<:Real}
 
 	# initializing relevant quantities
 	num_lambda = size(X, 1)
@@ -128,18 +128,10 @@ function fit_gen_pca(X::Matrix{T}; mu::Vector{T}=vec(mean(X, dims=2)), num_compo
 	return (mu, M, scores, fracvar)
 end
 
-function DPCA(
-    spectra::Matrix{T},
-    λs::Vector{T};
-    template::Vector{T} = make_template(spectra),
-    num_components::Int = 3,
-) where {T<:Real}
-    doppler_comp = calc_doppler_component_RVSKL(λs, template)
+function DPCA(spectra::Matrix{T}, λs::Vector{T};
+	template::Vector{T}=make_template(spectra), kwargs...) where {T<:Real}
 
-    return fit_gen_pca_rv_RVSKL(
-        spectra,
-        doppler_comp,
-        mu = template,
-        num_components = num_components,
-    )
+	doppler_comp = calc_doppler_component_RVSKL(λs, template)
+    return fit_gen_pca_rv_RVSKL(spectra, doppler_comp, mu=template, kwargs...)
+end
 end
