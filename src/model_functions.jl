@@ -124,7 +124,7 @@ struct TFSubmodel{T<:Number}
     log_λ::AbstractVector{T}
     λ::AbstractVector{T}
 	lm::LinearModel
-    function TFSubmodel(log_λ_obs, model_res, n_comp; include_mean::Bool=true)
+    function TFSubmodel(log_λ_obs::AbstractVector, model_res::Real, n_comp::Int; include_mean::Bool=true)
         n_obs = size(log_λ_obs, 2)
 		len, log_λ, λ = create_λ_template(log_λ_obs, model_res)
 		if include_mean
@@ -141,6 +141,20 @@ struct TFSubmodel{T<:Number}
 end
 (tfsm::TFSubmodel)(inds::AbstractVecOrMat) =
 	TFSubmodel(tfsm.log_λ, tfsm.λ, tfsm.lm(inds))
+
+downsize(lm::FullLinearModel, n_comp::Int) =
+	FullLinearModel(lm.M[:, 1:n_comp], lm.s[1:n_comp, :], lm.μ[:])
+downsize(lm::BaseLinearModel, n_comp::Int) =
+	BaseLinearModel(lm.M[:, 1:n_comp], lm.s[1:n_comp, :])
+downsize(tfsm::TFSubmodel, n_comp::Int) =
+	TFSubmodel(tfsm.log_λ[:], tfsm.λ[:], downsize(tfsm.lm, n_comp))
+downsize(tfm::TFOrderModel, n_comp_tel::Int, n_comp_star::Int) =
+	TFOrderModel(
+		downsize(tfm.tel, n_comp_tel),
+		downsize(tfm.star, n_comp_star),
+		tfm.rv, tfm.reg_tel, tfm.reg_star, tfm.lih_t2b, tfm.lih_b2t,
+		tfm.lih_o2b, tfm.lih_b2o, tfm.lih_t2o, tfm.lih_o2t, tfm.todo,
+		tfm.instrument, tfm.order)
 
 function _shift_log_λ_model(log_λ_obs_from, log_λ_obs_to, log_λ_model_from)
 	n_obs = size(log_λ_obs_from, 2)
@@ -284,8 +298,13 @@ function _spectra_interp_gp_div_gp!(fluxes::AbstractMatrix, vars::AbstractMatrix
 	end
 end
 
+function n_comps_needed(tfsm::TFSubmodel; threshold::Real=0.05)
+    @assert 0 < threshold < 1
+    s_var = sum(abs2, tfsm.lm.s; dims=2)
+    return findfirst(s_var ./ sum(s_var) .< threshold)[1] - 1
+end
 
-function initialize!(tfom, tfd; min::Number=0.05, max::Number=1.1, use_gp::Bool=false)
+function initialize!(tfom::TFOrderModel, tfd::TFDt; min::Number=0, max::Number=1.2, use_gp::Bool=false)
 
 	μ_min = min + 0.05
 	μ_max = max - 0.05
@@ -326,24 +345,27 @@ function initialize!(tfom, tfd; min::Number=0.05, max::Number=1.1, use_gp::Bool=
 		flux_tel .= tfom.tel.lm.μ
 		_spectra_interp_gp_div_gp!(flux_star, vars_star, tfom.star.log_λ, tfd.flux, tfd.var, tfd.log_λ_star, flux_tel, vars_tel, tel_log_λ_star)
 	else
-		flux_star = spectra_interp(tfd.flux, tfom.lih_o2b) ./
-			spectra_interp(repeat(tfom.tel.lm.μ, 1, n_obs), tfom.lih_t2b)
+		_tel_μ = spectra_interp(repeat(tfom.tel.lm.μ, 1, n_obs), tfom.lih_t2b)
+		flux_star = spectra_interp(tfd.flux, tfom.lih_o2b) ./ _tel_μ
+		vars_star = spectra_interp(tfd.var, tfom.lih_o2b) ./ _tel_μ  # TODO:should be adding in quadtrature, but fix later
 	end
 	tfom.star.lm.μ[:] = make_template(flux_star; min=μ_min, max=μ_max)
-	_, M_star, s_star, _, rvs_notel =
-	    DPCA(flux_star, tfom.star.λ; template=tfom.star.lm.μ, num_components=n_comp_star)
+	_, M_star, s_star, rvs_notel =
+	    DEMPCA(flux_star, tfom.star.λ, 1 ./ vars_star; template=tfom.star.lm.μ, num_components=n_comp_star)
 
 	# telluric model with updated stellar template
 	if use_gp
 		flux_star .= tfom.star.lm.μ
 		_spectra_interp_gp_div_gp!(flux_tel, vars_tel, tfom.tel.log_λ, tfd.flux, tfd.var, tfd.log_λ_obs, flux_star, vars_star, star_log_λ_tel)
 	else
-		flux_tel = spectra_interp(tfd.flux, tfom.lih_o2t) ./
-			spectra_interp(repeat(tfom.star.lm.μ, 1, n_obs), tfom.lih_b2t)
+		_star_μ = spectra_interp(repeat(tfom.star.lm.μ, 1, n_obs), tfom.lih_b2t)
+		flux_tel = spectra_interp(tfd.flux, tfom.lih_o2t) ./ _star_μ
+		vars_tel = spectra_interp(tfd.var, tfom.lih_o2t) ./ _star_μ  # TODO:should be adding in quadtrature, but fix later
 	end
 	tfom.tel.lm.μ[:] = make_template(flux_tel; min=μ_min, max=μ_max)
-	_, tfom.tel.lm.M[:, :], tfom.tel.lm.s[:, :], _ =
-	    fit_gen_pca(flux_tel; num_components=n_comp_tel, mu=tfom.tel.lm.μ)
+	m_tel = empca.empca((flux_tel .- tfom.tel.lm.μ)', 1 ./ vars_tel', nvec=n_comp_tel, silent=true)
+	tfom.tel.lm.M[:, :] = m_tel.eigvec'
+	tfom.tel.lm.s[:, :] = m_tel.coeff'
 
 	tfom.star.lm.M[:, :], tfom.star.lm.s[:] = M_star[:, 2:end], s_star[2:end, :]
 	tfom.rv.lm.M[:, :], tfom.rv.lm.s[:] = M_star[:, 1], s_star[1, :]'

@@ -1,5 +1,7 @@
 # functions related to calculating the PCA scores of time series spectra
 using LinearAlgebra
+using EMPCA
+
 """
 modified code shamelessly stolen from RvSpectraKitLearn.jl/src/deriv_spectra_simple.jl
 Estimate the derivatives of a vector
@@ -132,6 +134,47 @@ function DPCA(spectra::Matrix{T}, λs::Vector{T};
 	template::Vector{T}=make_template(spectra), kwargs...) where {T<:Real}
 
 	doppler_comp = calc_doppler_component_RVSKL(λs, template)
-    return fit_gen_pca_rv_RVSKL(spectra, doppler_comp, mu=template, kwargs...)
+    return fit_gen_pca_rv_RVSKL(spectra, doppler_comp; mu=template, kwargs...)
 end
+
+
+"""
+modified code shamelessly stolen from RvSpectraKitLearn.jl/src/generalized_pca.jl
+Compute first num_components basis vectors for PCA, after subtracting projection onto fixed_comp
+"""
+function fit_empca_rv(X::Matrix{T}, fixed_comp::Vector{T}, weights::Matrix{T}; mu::Vector{T}=vec(mean(X, dims=2)), num_components::Integer=3, kwargs...) where {T<:Real}
+
+	# initializing relevant quantities
+	num_lambda = size(X, 1)
+    num_spectra = size(X, 2)
+    M = rand(T, (num_lambda, num_components))  # random initialization is part of algorithm (i.e., not zeros)
+    scores = zeros(num_components, num_spectra)
+
+    Xtmp = X .- mu  # perform PCA after subtracting off mean
+
+	# doppler component calculations
+	M[:, 1] = fixed_comp  # Force fixed (i.e., Doppler) component to replace first PCA component
+    fixed_comp_norm2 = sum(abs2, fixed_comp)
+    for i in 1:num_spectra
+        scores[1, i] = z = dot(view(Xtmp, :, i), fixed_comp) / fixed_comp_norm2  # Normalize differently, so scores are z (i.e., doppler shift)
+	    Xtmp[:, i] -= z * fixed_comp
+    end
+
+	if num_components > 1
+		m = empca.empca(Xtmp', weights', nvec=num_components-1, silent=true, kwargs...)
+		M[:, 2:end] = m.eigvec'
+		scores[2:end, :] = m.coeff'
+	end
+
+	# calculating radial velocities (in m/s) from redshifts
+	rvs = light_speed_nu * scores[1, :]  # c * z
+
+	return (mu, M, scores, rvs)
+end
+
+function DEMPCA(spectra::Matrix{T}, λs::Vector{T}, weights::Matrix{T};
+	template::Vector{T}=make_template(spectra), kwargs...) where {T<:Real}
+
+	doppler_comp = calc_doppler_component_RVSKL(λs, template)
+    return fit_empca_rv(spectra, doppler_comp, weights; mu=template, kwargs...)
 end

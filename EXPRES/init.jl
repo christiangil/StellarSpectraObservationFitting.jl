@@ -6,7 +6,7 @@ Pkg.instantiate()
 ## Importing data with Eric's code
 
 stars = ["10700", "26965"]
-star = stars[2]
+star = stars[1]
 
 using RvSpectMLBase, RvSpectML
 using EchelleInstruments, EchelleInstruments.EXPRES
@@ -80,7 +80,7 @@ import telfitting; tf = telfitting
 
 n_obs = length(all_spectra)
 obs_resolution = 150000
-desired_order = 50
+desired_order = 68
 mask_inds = inds[desired_order]
 # inst = all_spectra[1].inst
 # extra_chop = 0
@@ -99,12 +99,13 @@ for i in 1:n_obs # 13s
     log_λ_star[:, i] = log.(all_spectra[i].λ[mask_inds, desired_order])
 end
 tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
-@time tf.process!(tf_data)
+@time tf.process!(tf_data; order=8)
 
 # using Plots
 #
 # snr = sqrt.(tf_data.flux.^2 ./ tf_data.var)
 # heatmap(snr)
+# histogram(collect(Iterators.flatten(snr)))
 #
 # plt = plot(;xlabel="MJD", ylabel="Å", title="EXPRES wavelength calibration ($star, order $desired_order)")
 # for i in 1:10
@@ -126,11 +127,15 @@ tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
 star_model_res = 2 * sqrt(2) * obs_resolution
 tel_model_res = 2 * sqrt(2) * obs_resolution
 
-@time tf_model = tf.TFOrderModel(tf_data, star_model_res, tel_model_res, "EXPRES", desired_order)
-
+@time tf_model = tf.TFOrderModel(tf_data, star_model_res, tel_model_res, "EXPRES", desired_order; n_comp_tel=10, n_comp_star=10)
 @time rvs_notel, rvs_naive = tf.initialize!(tf_model, tf_data; use_gp=true)
+tf_model = tf.downsize(tf_model, tf.n_comps_needed(tf_model.tel), tf.n_comps_needed(tf_model.star))
+
+# @save expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
+
 include("../src/_plot_functions.jl")
 plot_stellar_model_bases(tf_model)
+plot_telluric_model_bases(tf_model)
 
 function proposed_new_cuts(M::AbstractVector, mask_inds::UnitRange)
     abs_M = abs.(M)

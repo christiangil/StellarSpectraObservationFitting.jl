@@ -131,9 +131,9 @@ function mask_bad_edges!(tfd; kwargs...)
 	end
 end
 
-function process!(tfd)
+function process!(tfd; kwargs...)
 	mask_low_pixels!(tfd)
 	mask_bad_edges!(tfd)
-	continuum_normalize!(tfd)
+	continuum_normalize!(tfd; kwargs...)
 	mask_high_pixels!(tfd)
 end
