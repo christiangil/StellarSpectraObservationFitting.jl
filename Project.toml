@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [deps]
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
+EMPCA = "e1a4e9fb-620a-4045-b313-23b3f0ae950a"
 Flux = "587475ba-b771-5e3f-ad9e-33799f191a9c"
 GPLinearODEMaker = "27ef9b34-1325-4cec-ba33-00f2f4637873"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
@@ -17,5 +18,6 @@ UnitfulAstro = "6112ee07-acf9-5e0f-b108-d242c714bf9f"
 Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
+EMPCA = "0.1"
 Stheno = "0.6"
 TemporalGPs = "0.3, 0.4"
