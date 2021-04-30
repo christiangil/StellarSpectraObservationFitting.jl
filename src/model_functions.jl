@@ -124,7 +124,7 @@ struct TFSubmodel{T<:Number}
     log_λ::AbstractVector{T}
     λ::AbstractVector{T}
 	lm::LinearModel
-    function TFSubmodel(log_λ_obs::AbstractVector, model_res::Real, n_comp::Int; include_mean::Bool=true)
+    function TFSubmodel(log_λ_obs::AbstractVecOrMat, model_res::Real, n_comp::Int; include_mean::Bool=true)
         n_obs = size(log_λ_obs, 2)
 		len, log_λ, λ = create_λ_template(log_λ_obs, model_res)
 		if include_mean
@@ -141,20 +141,6 @@ struct TFSubmodel{T<:Number}
 end
 (tfsm::TFSubmodel)(inds::AbstractVecOrMat) =
 	TFSubmodel(tfsm.log_λ, tfsm.λ, tfsm.lm(inds))
-
-downsize(lm::FullLinearModel, n_comp::Int) =
-	FullLinearModel(lm.M[:, 1:n_comp], lm.s[1:n_comp, :], lm.μ[:])
-downsize(lm::BaseLinearModel, n_comp::Int) =
-	BaseLinearModel(lm.M[:, 1:n_comp], lm.s[1:n_comp, :])
-downsize(tfsm::TFSubmodel, n_comp::Int) =
-	TFSubmodel(tfsm.log_λ[:], tfsm.λ[:], downsize(tfsm.lm, n_comp))
-downsize(tfm::TFOrderModel, n_comp_tel::Int, n_comp_star::Int) =
-	TFOrderModel(
-		downsize(tfm.tel, n_comp_tel),
-		downsize(tfm.star, n_comp_star),
-		tfm.rv, tfm.reg_tel, tfm.reg_star, tfm.lih_t2b, tfm.lih_b2t,
-		tfm.lih_o2b, tfm.lih_b2o, tfm.lih_t2o, tfm.lih_o2t, tfm.todo,
-		tfm.instrument, tfm.order)
 
 function _shift_log_λ_model(log_λ_obs_from, log_λ_obs_to, log_λ_model_from)
 	n_obs = size(log_λ_obs_from, 2)
@@ -226,6 +212,20 @@ end
 	tfom.lih_o2b(inds, size(tfom.lih_b2o.li, 1)), tfom.lih_b2o(inds, size(tfom.lih_o2b.li, 1)),
 	tfom.lih_t2o(inds, size(tfom.lih_o2t.li, 1)), tfom.lih_o2t(inds, size(tfom.lih_b2o.li, 1)),
 	tfom.todo, tfom.instrument, tfom.order)
+
+downsize(lm::FullLinearModel, n_comp::Int) =
+	FullLinearModel(lm.M[:, 1:n_comp], lm.s[1:n_comp, :], lm.μ[:])
+downsize(lm::BaseLinearModel, n_comp::Int) =
+	BaseLinearModel(lm.M[:, 1:n_comp], lm.s[1:n_comp, :])
+downsize(tfsm::TFSubmodel, n_comp::Int) =
+	TFSubmodel(tfsm.log_λ[:], tfsm.λ[:], downsize(tfsm.lm, n_comp))
+downsize(tfm::TFOrderModel, n_comp_tel::Int, n_comp_star::Int) =
+	TFOrderModel(
+		downsize(tfm.tel, n_comp_tel),
+		downsize(tfm.star, n_comp_star),
+		tfm.rv, tfm.reg_tel, tfm.reg_star, tfm.lih_t2b, tfm.lih_b2t,
+		tfm.lih_o2b, tfm.lih_b2o, tfm.lih_t2o, tfm.lih_o2t, tfm.todo,
+		tfm.instrument, tfm.order)
 
 tel_prior(tfom::TFOrderModel) = model_prior(tfom.tel.lm, tfom.reg_tel)
 star_prior(tfom::TFOrderModel) = model_prior(tfom.star.lm, tfom.reg_star)
@@ -304,7 +304,7 @@ function n_comps_needed(tfsm::TFSubmodel; threshold::Real=0.05)
     return findfirst(s_var ./ sum(s_var) .< threshold)[1] - 1
 end
 
-function initialize!(tfom::TFOrderModel, tfd::TFDt; min::Number=0, max::Number=1.2, use_gp::Bool=false)
+function initialize!(tfom::TFOrderModel, tfd::TFData; min::Number=0, max::Number=1.2, use_gp::Bool=false)
 
 	μ_min = min + 0.05
 	μ_max = max - 0.05
