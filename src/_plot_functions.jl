@@ -5,7 +5,7 @@ plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (Å)", ylabel = "Conti
 plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
 plot_scores(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "Weights", dpi = 400, kwargs...)
 
-function plot_model_rvs(times_nu::Vector{T}, rvs_naive::Vector{T}, rvs_notel::Vector{T}, rvs_notel_opt::Vector{T}) where {T<:Real}
+function plot_model_rvs(times_nu::AbstractVector{T}, rvs_naive::AbstractVector{T}, rvs_notel::AbstractVecOrMat{T}, rvs_notel_opt::AbstractVecOrMat{T}) where {T<:Real}
     predict_plot = plot_rv()
     plot!(predict_plot, times_nu, rvs_naive, st=:scatter, ms=3, color=:red, label="Naive, std: $(round(std(rvs_naive), digits=3))")
     plot!(predict_plot, times_nu, rvs_notel, st=:scatter, ms=3, color=:lightgreen, label="Before optimization, std: $(round(std(rvs_notel), digits=3))")
