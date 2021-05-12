@@ -14,37 +14,37 @@ function plot_model_rvs(times_nu::AbstractVector{T}, rvs_naive::AbstractVector{T
     return predict_plot
 end
 
-function plot_stellar_model_bases(tf_model::telfitting.TFOrderModel)
+function plot_stellar_model_bases(tfom::telfitting.TFOrderModel; inds::UnitRange=1:size(tfom.star.lm.M, 2))
     predict_plot = plot_spectrum(; title="Stellar model bases")
-    plot!(tf_model.star.λ, tf_model.star.lm.μ; label="μ")
-    for i in 1:size(tf_model.star.lm.M, 2)
-        plot!(tf_model.star.λ, tf_model.star.lm.M[:, i] ./ norm(tf_model.star.lm.M[:, i]); label="basis $i")
+    plot!(tfom.star.λ, tfom.star.lm.μ; label="μ")
+    for i in inds
+        plot!(tfom.star.λ, tfom.star.lm.M[:, i] ./ norm(tfom.star.lm.M[:, i]); label="basis $i")
     end
     display(predict_plot)
     return predict_plot
 end
-function plot_stellar_model_scores(tf_model::telfitting.TFOrderModel)
+function plot_stellar_model_scores(tfom::telfitting.TFOrderModel; inds::UnitRange=1:size(tfom.star.lm.M, 2))
     predict_plot = plot_scores(; title="Stellar model scores")
-    for i in 1:size(tf_model.star.lm.M, 2)
-        scatter!(times_nu, tf_model.star.lm.s[i, :] .* norm(tf_model.star.lm.M[:, i]); label="weights $i")
+    for i in inds
+        scatter!(times_nu, tfom.star.lm.s[i, :] .* norm(tfom.star.lm.M[:, i]); label="weights $i")
     end
     display(predict_plot)
     return predict_plot
 end
 
-function plot_telluric_model_bases(tf_model::telfitting.TFOrderModel)
+function plot_telluric_model_bases(tfom::telfitting.TFOrderModel; inds::UnitRange=1:size(tfom.tel.lm.M, 2))
     predict_plot = plot_spectrum(; title="Telluric model bases")
-    plot!(tf_model.tel.λ, tf_model.tel.lm.μ; label="μ")
-    for i in 1:size(tf_model.tel.lm.M, 2)
-        plot!(tf_model.tel.λ, tf_model.tel.lm.M[:, i] ./ norm(tf_model.tel.lm.M[:, i]); label="basis $i")
+    plot!(tfom.tel.λ, tfom.tel.lm.μ; label="μ")
+    for i in inds
+        plot!(tfom.tel.λ, tfom.tel.lm.M[:, i] ./ norm(tfom.tel.lm.M[:, i]); label="basis $i")
     end
     display(predict_plot)
     return predict_plot
 end
-function plot_telluric_model_scores(tf_model::telfitting.TFOrderModel)
+function plot_telluric_model_scores(tfom::telfitting.TFOrderModel; inds::UnitRange=1:size(tfom.tel.lm.M, 2))
     predict_plot = plot_scores(; title="Telluric model scores")
-    for i in 1:size(tf_model.tel.lm.M, 2)
-        scatter!(times_nu, tf_model.tel.lm.s[i, :] .* norm(tf_model.tel.lm.M[:, i]); label="weights $i")
+    for i in inds
+        scatter!(times_nu, tfom.tel.lm.s[i, :] .* norm(tfom.tel.lm.M[:, i]); label="weights $i")
     end
     scatter!(times_nu, airmasses; label="airmasses")
     display(predict_plot)
