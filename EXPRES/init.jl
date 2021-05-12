@@ -6,7 +6,7 @@ Pkg.instantiate()
 ## Importing data with Eric's code
 
 stars = ["10700", "26965"]
-star = stars[1]
+star = stars[2]
 
 using RvSpectMLBase, RvSpectML
 using EchelleInstruments, EchelleInstruments.EXPRES
@@ -87,6 +87,8 @@ mask_inds = inds[desired_order]
 # mask_inds = (min_col_default(inst, desired_order) + extra_chop):(max_col_default(inst, desired_order) - extra_chop)  # 850:6570
 # mask_inds = 2270:5150
 
+# plot(all_spectra[1].metadata[:tellurics][:, desired_order])
+
 len_obs = length(mask_inds)
 flux_obs = ones(len_obs, n_obs)
 var_obs = zeros(len_obs, n_obs)
@@ -99,7 +101,9 @@ for i in 1:n_obs # 13s
     log_λ_star[:, i] = log.(all_spectra[i].λ[mask_inds, desired_order])
 end
 tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
-@time tf.process!(tf_data; order=8)
+# i=10
+# tf.fit_continuum(tf_data.log_λ_obs[:, i], tf_data.flux[:, i], tf_data.var[:, i]; order=6, plot_stuff=true)
+@time tf.process!(tf_data; order=6)
 
 # using Plots
 #
@@ -128,10 +132,11 @@ star_model_res = 2 * sqrt(2) * obs_resolution
 tel_model_res = 2 * sqrt(2) * obs_resolution
 
 @time tf_model = tf.TFOrderModel(tf_data, star_model_res, tel_model_res, "EXPRES", desired_order; n_comp_tel=10, n_comp_star=10)
-@time rvs_notel, rvs_naive = tf.initialize!(tf_model, tf_data; use_gp=true)
+@time rvs_notel, rvs_naive, fracvar_tel, fracvar_star = tf.initialize!(tf_model, tf_data; use_gp=true)
 tf_model = tf.downsize(tf_model, tf.n_comps_needed(tf_model.tel), tf.n_comps_needed(tf_model.star))
+# tf_model = tf.downsize(tf_model, 1, 1)
 
-# @save expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
+@save expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
 
 include("../src/_plot_functions.jl")
 plot_stellar_model_bases(tf_model)
