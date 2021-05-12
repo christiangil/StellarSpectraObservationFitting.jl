@@ -27,6 +27,7 @@ function general_lst_sq(
 end
 
 
+# using Plots
 # These were initially defined to act on all of the orders of the spectra at a
 # given time, but I have defined them to act on all of the times of the spectra
 # at a given order. Should be equivalent
@@ -53,8 +54,15 @@ function fit_continuum(x::AbstractVector, y::AbstractVector, σ²::AbstractVecto
         m[σ² .== Inf] .= false  # mask out the bad pixels
         w = general_lst_sq(view(A, m, :), view(y, m), view(σ², m))
         μ[:] = A * w
+		# if plot_stuff
+		# 	plt = scatter(x[m], y[m]; label="used")
+		# 	scatter!(plt, x[.!m], y[.!m]; label="masked")
+		# 	plot!(plt, x, μ; label="model")
+		# 	display(plt)
+		# end
         resid = y - μ
-        sigma = median(abs.(resid))
+        # sigma = median(abs.(resid))
+		sigma = std(resid)
         m_new = (-nsigma[1]*sigma) .< resid .< (nsigma[2]*sigma)
         if sum(m) == sum(m_new); break end
         m = m_new

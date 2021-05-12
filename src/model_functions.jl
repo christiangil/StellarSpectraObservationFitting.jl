@@ -304,7 +304,7 @@ function n_comps_needed(tfsm::TFSubmodel; threshold::Real=0.05)
     return findfirst(s_var ./ sum(s_var) .< threshold)[1] - 1
 end
 
-function initialize!(tfom::TFOrderModel, tfd::TFData; min::Number=0, max::Number=1.2, use_gp::Bool=false)
+function initialize!(tfom::TFOrderModel, tfd::TFData; min::Number=0, max::Number=1.2, use_gp::Bool=false, kwargs...)
 
 	μ_min = min + 0.05
 	μ_max = max - 0.05
