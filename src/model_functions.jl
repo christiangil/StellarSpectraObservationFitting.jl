@@ -351,7 +351,8 @@ function initialize!(tfom::TFOrderModel, tfd::TFData; min::Number=0, max::Number
 	end
 	tfom.star.lm.μ[:] = make_template(flux_star; min=μ_min, max=μ_max)
 	_, M_star, s_star, rvs_notel =
-	    DEMPCA(flux_star, tfom.star.λ, 1 ./ vars_star; template=tfom.star.lm.μ, num_components=n_comp_star)
+	    DEMPCA(flux_star, tfom.star.λ, 1 ./ vars_star; template=tfom.star.lm.μ, num_components=n_comp_star, kwargs...)
+	fracvar_star = fracvar(flux_star .- tfom.star.lm.μ, M_star, s_star)
 
 	# telluric model with updated stellar template
 	if use_gp
@@ -363,9 +364,9 @@ function initialize!(tfom::TFOrderModel, tfd::TFData; min::Number=0, max::Number
 		vars_tel = spectra_interp(tfd.var, tfom.lih_o2t) ./ _star_μ  # TODO:should be adding in quadtrature, but fix later
 	end
 	tfom.tel.lm.μ[:] = make_template(flux_tel; min=μ_min, max=μ_max)
-	m_tel = empca.empca((flux_tel .- tfom.tel.lm.μ)', 1 ./ vars_tel', nvec=n_comp_tel, silent=true)
-	tfom.tel.lm.M[:, :] = m_tel.eigvec'
-	tfom.tel.lm.s[:, :] = m_tel.coeff'
+	Xtmp = flux_tel .- tfom.tel.lm.μ
+	EMPCA!(tfom.tel.lm.M, Xtmp, tfom.tel.lm.s, 1 ./ vars_tel, sum(abs2, Xtmp); kwargs...)
+	fracvar_tel = fracvar(Xtmp, tfom.tel.lm.M, tfom.tel.lm.s)
 
 	tfom.star.lm.M[:, :], tfom.star.lm.s[:] = M_star[:, 2:end], s_star[2:end, :]
 	tfom.rv.lm.M[:, :], tfom.rv.lm.s[:] = M_star[:, 1], s_star[1, :]'
@@ -373,7 +374,7 @@ function initialize!(tfom::TFOrderModel, tfd::TFData; min::Number=0, max::Number
 	fix_FullLinearModel_s!(tfom.star.lm, min, max)
 	fix_FullLinearModel_s!(tfom.tel.lm, min, max)
 
-	return rvs_notel, rvs_naive
+	return rvs_notel, rvs_naive, fracvar_tel, fracvar_star
 end
 
 L1(a::AbstractArray) = sum(abs.(a))
