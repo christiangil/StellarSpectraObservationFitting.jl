@@ -325,7 +325,7 @@ function initialize!(tfom::TFOrderModel, tfd::TFData; min::Number=0, max::Number
 		flux_star = spectra_interp(tfd.flux, tfom.lih_o2b)
 	end
 	tfom.star.lm.μ[:] = make_template(flux_star; min=μ_min, max=μ_max)
-	_, _, _, _, rvs_naive =
+	_, _, _, rvs_naive =
 	    DPCA(flux_star, tfom.star.λ; template=tfom.star.lm.μ, num_components=1)
 
 	# telluric model with stellar template
@@ -347,7 +347,7 @@ function initialize!(tfom::TFOrderModel, tfd::TFData; min::Number=0, max::Number
 	else
 		_tel_μ = spectra_interp(repeat(tfom.tel.lm.μ, 1, n_obs), tfom.lih_t2b)
 		flux_star = spectra_interp(tfd.flux, tfom.lih_o2b) ./ _tel_μ
-		vars_star = spectra_interp(tfd.var, tfom.lih_o2b) ./ _tel_μ  # TODO:should be adding in quadtrature, but fix later
+		vars_star = spectra_interp(tfd.var, tfom.lih_o2b) ./ (_tel_μ .^2)  # TODO:should be adding in quadtrature, but fix later
 	end
 	tfom.star.lm.μ[:] = make_template(flux_star; min=μ_min, max=μ_max)
 	_, M_star, s_star, rvs_notel =
@@ -361,11 +361,11 @@ function initialize!(tfom::TFOrderModel, tfd::TFData; min::Number=0, max::Number
 	else
 		_star_μ = spectra_interp(repeat(tfom.star.lm.μ, 1, n_obs), tfom.lih_b2t)
 		flux_tel = spectra_interp(tfd.flux, tfom.lih_o2t) ./ _star_μ
-		vars_tel = spectra_interp(tfd.var, tfom.lih_o2t) ./ _star_μ  # TODO:should be adding in quadtrature, but fix later
+		vars_tel = spectra_interp(tfd.var, tfom.lih_o2t) ./ (_star_μ .^ 2) # TODO:should be adding in quadtrature, but fix later
 	end
 	tfom.tel.lm.μ[:] = make_template(flux_tel; min=μ_min, max=μ_max)
 	Xtmp = flux_tel .- tfom.tel.lm.μ
-	EMPCA!(tfom.tel.lm.M, Xtmp, tfom.tel.lm.s, 1 ./ vars_tel, sum(abs2, Xtmp); kwargs...)
+	EMPCA!(tfom.tel.lm.M, Xtmp, tfom.tel.lm.s, 1 ./ vars_tel; kwargs...)
 	fracvar_tel = fracvar(Xtmp, tfom.tel.lm.M, tfom.tel.lm.s)
 
 	tfom.star.lm.M[:, :], tfom.star.lm.s[:] = M_star[:, 2:end], s_star[2:end, :]

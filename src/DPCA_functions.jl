@@ -100,10 +100,9 @@ function fit_gen_pca_rv_RVSKL(X::Matrix{T}, fixed_comp::Vector{T}; mu::Vector{T}
     scores = zeros(num_components, num_spectra)
 
     Xtmp = X .- mu  # perform PCA after subtracting off mean
-    totalvar = sum(abs2, Xtmp)
 
 	# doppler component calculations
-	rvs = project_doppler_comp!(M, Xtmp, scores, fixed_comp, totalvar)
+	rvs = project_doppler_comp!(M, Xtmp, scores, fixed_comp)
 
 	if num_components>1
 		find_PCA_comps!(M, Xtmp, scores, s; inds=2:num_components)
@@ -123,7 +122,6 @@ function fit_gen_pca(X::Matrix{T}; mu::Vector{T}=vec(mean(X, dims=2)), num_compo
     scores = zeros(num_components, num_spectra)
 
     Xtmp = X .- mu  # perform PCA after subtracting off mean
-    totalvar = sum(abs2, Xtmp)
 
 	find_PCA_comps!(M, Xtmp, scores, s)
 
@@ -138,7 +136,7 @@ function DPCA(spectra::Matrix{T}, λs::Vector{T};
 end
 
 
-function EMPCA!(M::AbstractMatrix, Xtmp::AbstractMatrix, scores::AbstractMatrix, weights::AbstractMatrix, totalvar::Real; inds::UnitRange{<:Int}=1:size(M, 2), kwargs...)
+function EMPCA!(M::AbstractMatrix, Xtmp::AbstractMatrix, scores::AbstractMatrix, weights::AbstractMatrix; inds::UnitRange{<:Int}=1:size(M, 2), kwargs...)
 	@assert inds[1] > 0
 	m = empca.empca(Xtmp', weights', nvec=length(inds), silent=true, kwargs...)
 	M[:, inds] = m.eigvec'
@@ -159,13 +157,12 @@ function fit_empca_rv(X::Matrix{T}, fixed_comp::Vector{T}, weights::Matrix{T}; m
     scores = zeros(num_components, num_spectra)
 
     Xtmp = X .- mu  # perform PCA after subtracting off mean
-	totalvar = sum(abs2, Xtmp)
 
 	# doppler component calculations
-	rvs = project_doppler_comp!(M, Xtmp, scores, fixed_comp, totalvar)
+	rvs = project_doppler_comp!(M, Xtmp, scores, fixed_comp)
 
 	if num_components > 1
-		_EMPCA!(M, Xtmp, scores, weights; inds=2:size(M, 2), kwargs...)
+		EMPCA!(M, Xtmp, scores, weights; inds=2:size(M, 2), kwargs...)
 	end
 
 	return (mu, M, scores, rvs)
