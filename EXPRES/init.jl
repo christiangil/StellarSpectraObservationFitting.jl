@@ -8,9 +8,11 @@ Pkg.instantiate()
 stars = ["10700", "26965"]
 star = stars[2]
 
+import StellarSpectraObservationFitting; SSOF = StellarSpectraObservationFitting
 using RvSpectMLBase, RvSpectML
 using EchelleInstruments, EchelleInstruments.EXPRES
 using CSV, DataFrames, Query, StatsBase, Statistics, Dates
+using JLD2
 
 target_subdir = star * "/"   # USER: Replace with directory of your choice
 fits_target_str = star
@@ -75,9 +77,6 @@ airmasses = [parse(Float64, md[:airmass]) for md in pipeline_plan.cache[:extract
 
 ## Switching to my data format
 
-using JLD2
-import telfitting; tf = telfitting
-
 n_obs = length(all_spectra)
 obs_resolution = 150000
 desired_order = 68
@@ -100,10 +99,10 @@ for i in 1:n_obs # 13s
     log_λ_obs[:, i] = log.(all_spectra[i].λ_obs[mask_inds, desired_order])
     log_λ_star[:, i] = log.(all_spectra[i].λ[mask_inds, desired_order])
 end
-tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
+tf_data = SSOF.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
 # i=10
-# tf.fit_continuum(tf_data.log_λ_obs[:, i], tf_data.flux[:, i], tf_data.var[:, i]; order=6, plot_stuff=true)
-@time tf.process!(tf_data; order=6)
+# SSOF.fit_continuum(tf_data.log_λ_obs[:, i], tf_data.flux[:, i], tf_data.var[:, i]; order=6, plot_stuff=true)
+@time SSOF.process!(tf_data; order=6)
 
 # using Plots
 #
@@ -118,7 +117,6 @@ tf_data = tf.TFData(flux_obs, var_obs, log_λ_obs, log_λ_star)
 # display(plt)
 # png("obs.png")
 #
-# using Plots
 # plt = plot(;xlabel="MJD", ylabel="Å", title="EXPRES wavelength calibration ($star, order $desired_order)")
 # for i in 1:10
 #     scatter!(plt, times_nu, exp.(log_λ_star[i, :]); label="pixel $(mask_inds[i])")

@@ -5,7 +5,7 @@ Pkg.instantiate()
 
 using JLD2
 using Statistics
-import telfitting; tf = telfitting
+import StellarSpectraObservationFitting; SSOF = StellarSpectraObservationFitting
 using Plots
 
 stars = ["10700", "26965"]
@@ -19,19 +19,19 @@ expres_data_path = "E:/telfitting/"
 
 @load expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
 
-tf_output = tf.TFOutput(tf_model)
+tf_output = SSOF.TFOutput(tf_model)
 
 if use_telstar
-    tf_workspace, loss = tf.TFWorkspaceTelStar(tf_model, tf_output, tf_data; return_loss_f=true)
+    tf_workspace, loss = SSOF.TFWorkspaceTelStar(tf_model, tf_output, tf_data; return_loss_f=true)
 else
-    tf_workspace, loss = tf.TFWorkspace(tf_model, tf_output, tf_data; return_loss_f=true)
+    tf_workspace, loss = SSOF.TFWorkspace(tf_model, tf_output, tf_data; return_loss_f=true)
 end
 
 if plot_stuff_fit
     plot_spectrum(; kwargs...) = plot(; xlabel = "Wavelength (Å)", ylabel = "Continuum Normalized Flux", dpi = 400, kwargs...)
     plot_rv(; kwargs...) = plot(; xlabel = "Time (d)", ylabel = "RV (m/s)", dpi = 400, kwargs...)
 
-    function status_plot(tfo::tf.TFOutput, tfd::tf.TFData; plot_epoch::Int=10, tracker::Int=0)
+    function status_plot(tfo::SSOF.TFOutput, tfd::SSOF.TFData; plot_epoch::Int=10, tracker::Int=0)
         obs_λ = exp.(tfd.log_λ_obs[:, plot_epoch])
         l = @layout [a; b]
         predict_plot = plot_spectrum(; legend = :bottomleft, size=(800,1200), layout = l)
@@ -57,13 +57,13 @@ if !tf_model.todo[:reg_improved]
     using StatsBase
     n_obs_train = Int(round(0.75 * n_obs))
     training_inds = sort(sample(1:n_obs, n_obs_train; replace=false))
-    tf.fit_regularization!(tf_model, tf_data, training_inds; use_telstar=use_telstar)
+    SSOF.fit_regularization!(tf_model, tf_data, training_inds; use_telstar=use_telstar)
     tf_model.todo[:reg_improved] = true
     @save expres_data_path * star * ".jld2" tf_model n_obs tf_data rvs_naive rvs_notel times_nu airmasses
 end
 
 @time for i in 1:8
-    tf.train_TFOrderModel!(tf_workspace)
+    SSOF.train_TFOrderModel!(tf_workspace)
     rvs_notel_opt[:] = (tf_model.rv.lm.s .* light_speed_nu)'
 
     append!(resid_stds, [std(rvs_notel_opt)])

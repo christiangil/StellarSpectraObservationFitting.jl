@@ -14,7 +14,7 @@ function plot_model_rvs(times_nu::AbstractVector{T}, rvs_naive::AbstractVector{T
     return predict_plot
 end
 
-function plot_stellar_model_bases(tfom::telfitting.TFOrderModel; inds::UnitRange=1:size(tfom.star.lm.M, 2))
+function plot_stellar_model_bases(tfom::StellarSpectraObservationFitting.TFOrderModel; inds::UnitRange=1:size(tfom.star.lm.M, 2))
     predict_plot = plot_spectrum(; title="Stellar model bases")
     plot!(tfom.star.λ, tfom.star.lm.μ; label="μ")
     for i in inds
@@ -23,7 +23,7 @@ function plot_stellar_model_bases(tfom::telfitting.TFOrderModel; inds::UnitRange
     display(predict_plot)
     return predict_plot
 end
-function plot_stellar_model_scores(tfom::telfitting.TFOrderModel; inds::UnitRange=1:size(tfom.star.lm.M, 2))
+function plot_stellar_model_scores(tfom::StellarSpectraObservationFitting.TFOrderModel; inds::UnitRange=1:size(tfom.star.lm.M, 2))
     predict_plot = plot_scores(; title="Stellar model scores")
     for i in inds
         scatter!(times_nu, tfom.star.lm.s[i, :] .* norm(tfom.star.lm.M[:, i]); label="weights $i")
@@ -32,7 +32,7 @@ function plot_stellar_model_scores(tfom::telfitting.TFOrderModel; inds::UnitRang
     return predict_plot
 end
 
-function plot_telluric_model_bases(tfom::telfitting.TFOrderModel; inds::UnitRange=1:size(tfom.tel.lm.M, 2))
+function plot_telluric_model_bases(tfom::StellarSpectraObservationFitting.TFOrderModel; inds::UnitRange=1:size(tfom.tel.lm.M, 2))
     predict_plot = plot_spectrum(; title="Telluric model bases")
     plot!(tfom.tel.λ, tfom.tel.lm.μ; label="μ")
     for i in inds
@@ -41,7 +41,7 @@ function plot_telluric_model_bases(tfom::telfitting.TFOrderModel; inds::UnitRang
     display(predict_plot)
     return predict_plot
 end
-function plot_telluric_model_scores(tfom::telfitting.TFOrderModel; inds::UnitRange=1:size(tfom.tel.lm.M, 2))
+function plot_telluric_model_scores(tfom::StellarSpectraObservationFitting.TFOrderModel; inds::UnitRange=1:size(tfom.tel.lm.M, 2))
     predict_plot = plot_scores(; title="Telluric model scores")
     for i in inds
         scatter!(times_nu, tfom.tel.lm.s[i, :] .* norm(tfom.tel.lm.M[:, i]); label="weights $i")

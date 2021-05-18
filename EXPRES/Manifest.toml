@@ -447,10 +447,10 @@ uuid = "27ef9b34-1325-4cec-ba33-00f2f4637873"
 version = "0.1.8"
 
 [[GPUArrays]]
-deps = ["AbstractFFTs", "Adapt", "LinearAlgebra", "Printf", "Random", "Serialization"]
-git-tree-sha1 = "3e10e95ddc385e1589c27b1a58f21bf3008b559c"
+deps = ["AbstractFFTs", "Adapt", "LinearAlgebra", "Printf", "Random", "Serialization", "Statistics"]
+git-tree-sha1 = "711b448634c8e1c3597eca3a72aeecf0d19c7d3b"
 uuid = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
-version = "6.3.0"
+version = "6.4.0"
 
 [[GPUCompiler]]
 deps = ["DataStructures", "InteractiveUtils", "LLVM", "Libdl", "Logging", "Scratch", "Serialization", "TimerOutputs", "UUIDs"]
@@ -610,9 +610,9 @@ version = "3.100.0+3"
 
 [[LLVM]]
 deps = ["CEnum", "Libdl", "Printf", "Unicode"]
-git-tree-sha1 = "b616937c31337576360cb9fb872ec7633af7b194"
+git-tree-sha1 = "a220efe4a6bc1c71809d002eb9ed9209ce5a86fb"
 uuid = "929cbde3-209d-540e-8aea-75f648917ca0"
-version = "3.6.0"
+version = "3.7.0"
 
 [[LZO_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]
@@ -1147,6 +1147,12 @@ git-tree-sha1 = "30cd8c360c54081f806b1ee14d2eecbef3c04c49"
 uuid = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 version = "0.9.8"
 
+[[StellarSpectraObservationFitting]]
+deps = ["Distributions", "EMPCA", "Flux", "GPLinearODEMaker", "LinearAlgebra", "Optim", "Statistics", "Stheno", "TemporalGPs", "Unitful", "UnitfulAstro", "Zygote"]
+path = "C:\\Users\\Christian\\Dropbox\\GP_research\\julia\\telfitting"
+uuid = "6b1189bd-9150-44f8-8055-f6ca7d16451e"
+version = "0.1.0"
+
 [[Stheno]]
 deps = ["BlockArrays", "ChainRulesCore", "Distances", "Distributions", "FillArrays", "LinearAlgebra", "MacroTools", "Random", "RecipesBase", "Requires", "Statistics", "Zygote", "ZygoteRules"]
 git-tree-sha1 = "3b4d04dbfff8f79753c9e0a15282b0849a90e964"
@@ -1235,10 +1241,10 @@ uuid = "f269a46b-ccf7-5d73-abea-4c690281aa53"
 version = "1.5.3"
 
 [[TimerOutputs]]
-deps = ["Printf"]
-git-tree-sha1 = "32cdbe6cd2d214c25a0b88f985c9e0092877c236"
+deps = ["ExprTools", "Printf"]
+git-tree-sha1 = "bf8aacc899a1bd16522d0350e1e2310510d77236"
 uuid = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
-version = "0.5.8"
+version = "0.5.9"
 
 [[TranscodingStreams]]
 deps = ["Random", "Test"]
@@ -1501,12 +1507,6 @@ uuid = "8e850ede-7688-5339-a07c-302acd2aaf8d"
 [[p7zip_jll]]
 deps = ["Artifacts", "Libdl"]
 uuid = "3f19e933-33d8-53b3-aaab-bd5110c3b7a0"
-
-[[telfitting]]
-deps = ["Distributions", "EMPCA", "Flux", "GPLinearODEMaker", "LinearAlgebra", "Optim", "Statistics", "Stheno", "TemporalGPs", "Unitful", "UnitfulAstro", "Zygote"]
-path = "C:\\Users\\Christian\\Dropbox\\GP_research\\julia\\telfitting"
-uuid = "6b1189bd-9150-44f8-8055-f6ca7d16451e"
-version = "0.1.0"
 
 [[x264_jll]]
 deps = ["Artifacts", "JLLWrappers", "Libdl", "Pkg"]

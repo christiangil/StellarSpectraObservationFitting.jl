@@ -1,4 +1,4 @@
-module telfitting
+module StellarSpectraObservationFitting
 
 include("general_functions.jl")
 include("DPCA_functions.jl")
