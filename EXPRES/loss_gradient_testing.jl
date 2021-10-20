@@ -30,6 +30,7 @@ using BandedMatrices
 inds = 1:100
 include("lsf.jl")
 x1 = lsf_broadener(exp.(data.log_λ_obs[inds,:]))
+x2 = lsf_broadener_sparse(exp.(data.log_λ_obs[inds,:]))
 x3 = Array(x2)
 x4 = BandedMatrix(x3, (5,5))
 y = data.flux[inds,:]
@@ -42,14 +43,28 @@ end
 
 
 f1(y) = sum(x1 * y)
+f2(y) = sum(x2 * y)
 f3(y) = sum(x3 * y)
 f4(y) = sum(x4 * y)
 @btime g_test(y, f1)
+@btime g_test(y, f2)
 @btime g_test(y, f3)
 @btime g_test(y, f4)
 
+zz=[1.]
+mul!(view(zz, , z', z)
+using BenchmarkTools
+x1 * y
+SSOF._times_func(x1, y)
+@btime x1 * y
+@btime SSOF._times_func(x1, y)
+@btime x2 * y
+@btime x3 * y
+
+
+
 # 7020, 114
-ind_λ = 1:1200; ind_t = 1:114
+ind_λ = 1:2400; ind_t = 1:114
 data_small = SSOF.LSFData(data.flux[ind_λ, ind_t], data.var[ind_λ, ind_t], data.log_λ_obs[ind_λ, ind_t], data.log_λ_star[ind_λ, ind_t], data.lsf_broadener[ind_λ,ind_λ])
 
 if false#isfile(save_path*"results.jld2")

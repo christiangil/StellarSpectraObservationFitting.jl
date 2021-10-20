@@ -2,6 +2,7 @@ module StellarSpectraObservationFitting
 
 include("general_functions.jl")
 include("DPCA_functions.jl")
+include("MatrixModifiers.jl")
 include("model_functions.jl")
 include("flatten.jl")
 include("optimization_functions.jl")

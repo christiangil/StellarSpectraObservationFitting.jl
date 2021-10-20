@@ -9,18 +9,18 @@ using SpecialFunctions
 
 abstract type Data end
 
-struct LSFData{T<:Real} <: Data
+struct LSFData{T<:Real, MM<:AcceptableMatrixModifier} <: Data
     flux::AbstractMatrix{T}
     var::AbstractMatrix{T}
     log_λ_obs::AbstractMatrix{T}
 	log_λ_obs_bounds::AbstractMatrix{T}
     log_λ_star::AbstractMatrix{T}
 	log_λ_star_bounds::AbstractMatrix{T}
-	lsf_broadener::SparseMatrixCSC
-	function LSFData(flux::AbstractMatrix{T}, var, log_λ_obs, log_λ_star, lsf_broadener) where {T<:Real}
+	lsf_broadener::MM
+	function LSFData(flux::AbstractMatrix{T}, var, log_λ_obs, log_λ_star, lsf_broadener::MM) where {T<:Real, MM<:AcceptableMatrixModifier}
 		@assert size(flux) == size(var) == size(log_λ_obs) == size(log_λ_star)
 		@assert size(lsf_broadener, 1) == size(lsf_broadener, 2) == size(flux, 1)
-		return new{T}(flux, var, log_λ_obs, bounds_generator(log_λ_obs), log_λ_star, bounds_generator(log_λ_star), lsf_broadener)
+		return new{T, MM}(flux, var, log_λ_obs, bounds_generator(log_λ_obs), log_λ_star, bounds_generator(log_λ_star), lsf_broadener)
 	end
 end
 (d::LSFData)(inds::AbstractVecOrMat) =
@@ -169,23 +169,10 @@ function oversamp_interp_helper(to_bounds::AbstractVector, from_x::AbstractVecto
 	ans = spzeros(length(to_bounds)-1, length(from_x))
 	bounds_inds = searchsortednearest(from_x, to_bounds)
 	for i in 1:size(ans, 1)
-		x_lo, x_hi = to_bounds[i], to_bounds[i+1]
-		lo_ind, hi_ind = bounds_inds[i], bounds_inds[i+1]
-		if from_x[lo_ind] < x_lo; lo_ind += 1 end
-		if from_x[hi_ind] > x_hi; hi_ind -= 1 end
-
-		edge_term_lo = (from_x[lo_ind] - x_lo) ^ 2 / (from_x[lo_ind] - from_x[lo_ind-1])
-		edge_term_hi = (x_hi - from_x[hi_ind]) ^ 2 / (from_x[hi_ind+1] - from_x[hi_ind])
-
-		ans[i, lo_ind-1] = edge_term_lo
-		ans[i, lo_ind] = from_x[lo_ind+1] + from_x[lo_ind] - 2 * x_lo - edge_term_lo
-
-		ans[i, lo_ind+1:hi_ind-1] .= view(from_x, lo_ind+2:hi_ind) .- view(from_x, lo_ind:hi_ind-2)
-
-		ans[i, hi_ind] = 2 * x_hi - from_x[hi_ind] - from_x[hi_ind-1] - edge_term_hi
-		ans[i, hi_ind+1] = edge_term_hi
-
-		ans[i, lo_ind-1:hi_ind+1] ./= 2 * (x_hi - x_lo)
+		_oversamp_ratios!(view(ans, i, lo_ind-1:hi_ind+1),
+			to_bounds[i], to_bounds[i+1],
+			bounds_inds[i], bounds_inds[i+1],
+			from_x)
 	end
 	dropzeros!(ans)
 	return ans
@@ -194,14 +181,14 @@ oversamp_interp_helper(to_bounds::AbstractMatrix, from_x::AbstractVector) =
 	[oversamp_interp_helper(view(to_bounds, :, i), from_x) for i in 1:size(to_bounds, 2)]
 
 
-struct OrderModel{T<:Number}
+struct OrderModel{T<:Number, MM<:AcceptableMatrixModifier}
     tel::Submodel{T}
     star::Submodel{T}
 	rv::Submodel{T}
 	reg_tel::Dict{Symbol, T}
 	reg_star::Dict{Symbol, T}
-	b2o::Vector{SparseMatrixCSC}
-	t2o::Vector{SparseMatrixCSC}
+	b2o::MM
+	t2o::MM
 	metadata::Dict{Symbol, Any}
     function OrderModel(
 		d::Data,
@@ -228,8 +215,8 @@ struct OrderModel{T<:Number}
 		t2o = oversamp_interp_helper(d.log_λ_obs_bounds, tel.log_λ)
         return OrderModel(tel, star, rv, copy(default_reg_tel), copy(default_reg_star), b2o, t2o, metadata)
     end
-    function OrderModel(tel::Submodel{T}, star, rv, reg_tel, reg_star, b2o, t2o, metadata) where {T<:Number}
-		return new{T}(tel, star, rv, reg_tel, reg_star, b2o, t2o, metadata)
+    function OrderModel(tel::Submodel{T}, star, rv, reg_tel, reg_star, b2o, t2o, metadata) where {T<:Number, MM<:AcceptableMatrixModifier}
+		return new{T, MM}(tel, star, rv, reg_tel, reg_star, b2o, t2o, metadata)
 	end
 end
 Base.copy(om::OrderModel) = OrderModel(copy(om.tel), copy(om.star), copy(om.rv), copy(om.reg_tel), copy(om.reg_star), copy(om.metadata))
@@ -268,12 +255,9 @@ downsize(m::OrderModel, n_comp_tel::Int, n_comp_star::Int) =
 tel_prior(om::OrderModel) = model_prior(om.tel.lm, om.reg_tel)
 star_prior(om::OrderModel) = model_prior(om.star.lm, om.reg_star)
 
-spectra_interp(model::AbstractMatrix, interp_helper::Vector{SparseMatrixCSC}) =
-	hcat([interp_helper[i] * view(model, :, i) for i in 1:size(model, 2)]...)
-
-tel_model(om::OrderModel; lm=om.tel.lm::LinearModel) = spectra_interp(lm(), om.t2o)
-star_model(om::OrderModel; lm=om.star.lm::LinearModel) = spectra_interp(lm(), om.b2o)
-rv_model(om::OrderModel; lm=om.rv.lm::LinearModel) = spectra_interp(lm(), om.b2o)
+tel_model(om::OrderModel; lm=om.tel.lm::LinearModel) = om.t2o * lm()
+star_model(om::OrderModel; lm=om.star.lm::LinearModel) = om.b2o * lm()
+rv_model(om::OrderModel; lm=om.rv.lm::LinearModel) = om.b2o * lm()
 
 
 function fix_FullLinearModel_s!(flm, min::Number, max::Number)

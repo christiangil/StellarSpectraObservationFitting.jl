@@ -132,6 +132,24 @@ function lsf_broadener(λ::AbstractVector; safe::Bool=true)
     wn = SSOF.Å_to_wavenumber.(λ)
     σs = lsf_σ_safe(wn, wn .- mean(wn))
     nwn = -wn
+    inds = Vector{UnitRange}(undef, length(λ))
+    # ratios = Vector{Array{Float64}}(undef, length(λ))
+    ratios = Vector{Vector{Float64}}(undef, length(λ))
+    for i in 1:length(nwn)
+        lo, hi = SSOF.searchsortednearest(nwn, [nwn[i] - 3 * σs[i], nwn[i] + 3 * σs[i]])
+        inds[i] = lo:hi
+        lsf = Normal(wn[i], σs[i])
+        # ratios[i] = Array(pdf.(lsf, wn[lo:hi])')
+        ratios[i] = pdf.(lsf, wn[lo:hi])
+        ratios[i] ./= sum(ratios[i])
+    end
+    return SSOF.ConstantOversampledInterpolator(inds, ratios)
+end
+function lsf_broadener_sparse(λ::AbstractVector; safe::Bool=true)
+    if safe; @assert 1000 < mean(λ) < 50000  "Are you sure you're using λ (Å) and not wavenumber (1/cm) or log(λ)?" end
+    wn = SSOF.Å_to_wavenumber.(λ)
+    σs = lsf_σ_safe(wn, wn .- mean(wn))
+    nwn = -wn
     holder = zeros(length(nwn), length(nwn))
     for i in 1:length(nwn)
         lo, hi = SSOF.searchsortednearest(nwn, [nwn[i] - 3 * σs[i], nwn[i] + 3 * σs[i]])
@@ -147,3 +165,5 @@ end
 #     [lsf_broadener(view(λ, :, i); kwargs...) for i in 1:size(λ, 2)]
 lsf_broadener(λ::AbstractMatrix; kwargs...) =
     lsf_broadener(vec(median(λ; dims=2)); kwargs...)
+lsf_broadener_sparse(λ::AbstractMatrix; kwargs...) =
+    lsf_broadener_sparse(vec(median(λ; dims=2)); kwargs...)
