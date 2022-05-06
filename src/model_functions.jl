@@ -23,35 +23,35 @@ function D_to_rv(D)
 	return light_speed_nu .* ((1 .- x) ./ (1 .+ x))
 end
 rv_to_D(v) = log.((1 .- v ./ light_speed_nu) ./ (1 .+ v ./ light_speed_nu)) ./ 2
-function spectra_interp(stellar_model_flux, model_log_λ::AbstractVector{<:Real}, rvs, log_λ_obs::AbstractMatrix)
-	n_obs = length(rvs)
-	len = size(log_λ_obs, 1)
-	lower_inds = Array{Int64}(undef, len)
-	ratios = Array{Float64}(undef, len)
-	# log_λ_holder = Array{Float64}(undef, len)
-	ans = Array{Float64}(undef, len, n_obs)
-	len_model = length(model_log_λ)
-	for i in 1:n_obs
-		# log_λ_holder[:] .= view(log_λ_obs, :, i) .+ rv_to_D(rvs[i])
-		log_λ_holder = view(log_λ_obs, :, i) .+ rv_to_D(rvs[i])
-		lower_inds[:] .= searchsortednearest(model_log_λ, log_λ_holder; lower=true)
-		for j in 1:len
-			if lower_inds[j] >= len_model
-				lower_inds[j] = len_model - 1
-				ratios[j] = 1
-			elseif lower_inds[j] < 1
-				lower_inds[j] = 1
-				ratios[j] = 0
-			else
-				x0 = model_log_λ[lower_inds[j]]
-				x1 = model_log_λ[lower_inds[j] + 1]
-				ratios[j] = (log_λ_holder[j] - x0) / (x1 - x0)
-			end
-		end
-		ans[:, i] = (stellar_model_flux[lower_inds, i] .* (1 .- ratios)) + (stellar_model_flux[lower_inds .+ 1, i] .* ratios)
-	end
-	return ans#, lower_inds, ratios
-end
+# function spectra_interp(stellar_model_flux, model_log_λ::AbstractVector{<:Real}, rvs, log_λ_obs::AbstractMatrix)
+# 	n_obs = length(rvs)
+# 	len = size(log_λ_obs, 1)
+# 	lower_inds = Array{Int64}(undef, len)
+# 	ratios = Array{Float64}(undef, len)
+# 	# log_λ_holder = Array{Float64}(undef, len)
+# 	ans = Array{Float64}(undef, len, n_obs)
+# 	len_model = length(model_log_λ)
+# 	for i in 1:n_obs
+# 		# log_λ_holder[:] .= view(log_λ_obs, :, i) .+ rv_to_D(rvs[i])
+# 		log_λ_holder = view(log_λ_obs, :, i) .+ rv_to_D(rvs[i])
+# 		lower_inds[:] .= searchsortednearest(model_log_λ, log_λ_holder; lower=true)
+# 		for j in 1:len
+# 			if lower_inds[j] >= len_model
+# 				lower_inds[j] = len_model - 1
+# 				ratios[j] = 1
+# 			elseif lower_inds[j] < 1
+# 				lower_inds[j] = 1
+# 				ratios[j] = 0
+# 			else
+# 				x0 = model_log_λ[lower_inds[j]]
+# 				x1 = model_log_λ[lower_inds[j] + 1]
+# 				ratios[j] = (log_λ_holder[j] - x0) / (x1 - x0)
+# 			end
+# 		end
+# 		ans[:, i] = (stellar_model_flux[lower_inds, i] .* (1 .- ratios)) + (stellar_model_flux[lower_inds .+ 1, i] .* ratios)
+# 	end
+# 	return ans#, lower_inds, ratios
+# end
 function _lower_inds(model_log_λ::AbstractVector{<:Real}, rvs, log_λ_obs::AbstractMatrix)
 	n_obs = length(rvs)
 	len = size(log_λ_obs, 1)
@@ -80,10 +80,10 @@ end
 # 	ratios = (log_λ_bary - x0) ./ (x1 - x0)
 # 	return (view(stellar_model_flux, lower_inds2).* (1 .- ratios)) + (view(stellar_model_flux, lower_inds2 .+ 1) .* ratios)
 # end
-function spectra_interp(stellar_model_flux, log_λ_obs_m_model_log_λ_lo::AbstractMatrix, model_log_λ_hi_m_lo, rvs, lower_inds2::AbstractMatrix, lower_inds2p1::AbstractMatrix)
-	ratios = (log_λ_obs_m_model_log_λ_lo .+ rv_to_D(rvs)') ./ model_log_λ_hi_m_lo
-	return (view(stellar_model_flux, lower_inds2).* (1 .- ratios)) + (view(stellar_model_flux, lower_inds2p1) .* ratios)
-end
+# function spectra_interp(stellar_model_flux, log_λ_obs_m_model_log_λ_lo::AbstractMatrix, model_log_λ_hi_m_lo, rvs, lower_inds2::AbstractMatrix, lower_inds2p1::AbstractMatrix)
+# 	ratios = (log_λ_obs_m_model_log_λ_lo .+ rv_to_D(rvs)') ./ model_log_λ_hi_m_lo
+# 	return (view(stellar_model_flux, lower_inds2).* (1 .- ratios)) + (view(stellar_model_flux, lower_inds2p1) .* ratios)
+# end
 struct StellarInterpolationHelper{T1<:Real, T2<:Int}
     log_λ_obs_m_model_log_λ_lo::AbstractMatrix{T1}
 	model_log_λ_hi_m_lo::T1
