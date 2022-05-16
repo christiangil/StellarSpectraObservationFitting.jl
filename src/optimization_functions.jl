@@ -9,27 +9,47 @@ abstract type AdamWorkspace<:ModelWorkspace end
 
 _χ²_loss(model, data, variance) = ((model .- data) .^ 2) ./ variance
 _χ²_loss(model, data::Data) = ((model .- data.flux) .^ 2) ./ data.var
-_loss_diagnostic(tel, star, rv, d::GenericData) =
-	_χ²_loss(total_model(tel, star, rv), d)
-_loss_diagnostic(tel, star, rv, d::LSFData) =
-	_χ²_loss(d.lsf * total_model(tel, star, rv), d)
+_loss_diagnostic(tel, star, d::GenericData) =
+	_χ²_loss(total_model(tel, star), d)
+_loss_diagnostic(tel, star, d::LSFData) =
+	_χ²_loss(d.lsf * total_model(tel, star), d)
+
+star_model(om::OrderModel; lm=om.star.lm::LinearModel) = spectra_interp(lm(), om.rv .+ om.bary_rvs, om.b2o)
 function _loss_diagnostic(o::Output, om::OrderModel, d::Data;
-	tel=nothing, star=nothing, rv_s=nothing)
+	tel=nothing, star=nothing, rv=nothing)
     !isnothing(tel) ? tel_o = spectra_interp(_eval_lm_vec(om, tel), om.t2o) : tel_o = o.tel
-    !isnothing(star) ? star_o = spectra_interp(_eval_lm_vec(om, star), om.b2o) : star_o = o.star
-    !isnothing(rv_s) ? rv_o = spectra_interp(_eval_lm(om.rv.lm.M, rv_s), om.b2o) : rv_o = o.rv
-    return _loss_diagnostic(tel_o, star_o, rv_o, d)
+    if !isnothing(star)
+		if !isnothing(rv))
+			star_o = spectra_interp(_eval_lm_vec(om, star), rv .+ om.bary_rvs, om.b2o)
+		else
+			star_o = spectra_interp(_eval_lm_vec(om, star), om.rv .+ om.bary_rvs, om.b2o)
+		end
+	elseif !isnothing(rv))
+		star_o = spectra_interp(om.star.lm()), rv .+ om.bary_rvs, om.b2o)
+	else
+		star_o = o.star
+	end
+    return _loss_diagnostic(tel_o, star_o, d)
 end
 _loss_diagnostic(mws::ModelWorkspace; kwargs...) = _loss_diagnostic(mws.o, mws.om, mws.d; kwargs...)
 
 # χ² loss function
-_loss(tel, star, rv, d::Data) = sum(_loss_diagnostic(tel, star, rv, d))
+_loss(tel, star, rv, d::Data) = sum(_loss_diagnostic(tel, star, d))
 function _loss(o::Output, om::OrderModel, d::Data;
-	tel=nothing, star=nothing, rv_s=nothing)
+	tel=nothing, star=nothing, rv=nothing)
     !isnothing(tel) ? tel_o = spectra_interp(_eval_lm_vec(om, tel), om.t2o) : tel_o = o.tel
-    !isnothing(star) ? star_o = spectra_interp(_eval_lm_vec(om, star), om.b2o) : star_o = o.star
-    !isnothing(rv_s) ? rv_o = spectra_interp(_eval_lm(om.rv.lm.M, rv_s), om.b2o) : rv_o = o.rv
-    return _loss(tel_o, star_o, rv_o, d)
+	if !isnothing(star)
+		if !isnothing(rv))
+			star_o = spectra_interp(_eval_lm_vec(om, star), rv .+ om.bary_rvs, om.b2o)
+		else
+			star_o = spectra_interp(_eval_lm_vec(om, star), om.rv .+ om.bary_rvs, om.b2o)
+		end
+	elseif !isnothing(rv))
+		star_o = spectra_interp(om.star.lm()), rv .+ om.bary_rvs, om.b2o)
+	else
+		star_o = o.star
+	end
+    return _loss(tel_o, star_o, d)
 end
 _loss(mws::ModelWorkspace; kwargs...) = _loss(mws.o, mws.om, mws.d; kwargs...)
 function _loss_recalc_rv_basis(o::Output, om::OrderModel, d::Data; kwargs...)

@@ -99,11 +99,16 @@ struct StellarInterpolationHelper{T1<:Real, T2<:Int}
 		return new{T, Int64}(log_λ_obs - (view(model_log_λ, lower_inds)), model_log_λ.step.hi, lower_inds_adj, lower_inds_adj .+ 1)
 	end
 end
-function stellar_spectra_interp(model_flux, rvs, sih::StellarInterpolationHelper)
+function spectra_interp(model_flux::AbstractMatrix, rvs::AbstractVector, sih::StellarInterpolationHelper)
 	ratios = (sih.log_λ_obs_m_model_log_λ_lo .+ rv_to_D(rvs)') ./ sih.model_log_λ_hi_m_lo
 	return (view(model_flux, sih.lower_inds).* (1 .- ratios)) + (view(model_flux, sih.lower_inds_p1) .* ratios)
 end
-
+function spectra_interp_nabla(model_flux, rvs, sih::StellarInterpolationHelper)
+	ratios = (sih.log_λ_obs_m_model_log_λ_lo .+ rv_to_D(rvs)') ./ sih.model_log_λ_hi_m_lo
+	return (model_flux[sih.lower_inds] .* (1 .- ratios)) + (model_flux[sih.lower_inds_p1] .* ratios)
+end
+spectra_interp(model_flux, rvs, sih::StellarInterpolationHelper) =
+	spectra_interp_nabla(model_flux, rvs, sih)
 
 struct LSFData{T<:Number, AM<:AbstractMatrix{T}, M<:Matrix{<:Number}} <: Data
     flux::AM
@@ -408,10 +413,11 @@ undersamp_interp_helper(to_x::AbstractMatrix, from_x::AbstractVector) =
 struct OrderModel{T<:Number}
     tel::Submodel
     star::Submodel
-	rv::Submodel
+	rv::AbstractVector
 	reg_tel::Dict{Symbol, T}
 	reg_star::Dict{Symbol, T}
-	b2o::AbstractVector{<:_current_matrix_modifier}
+	b2o::StellarInterpolationHelper
+	bary_rvs::AbstractVector{<:Real}
 	t2o::AbstractVector{<:_current_matrix_modifier}
 	metadata::Dict{Symbol, Any}
 	n::Int
@@ -428,29 +434,31 @@ function OrderModel(
 
 	tel = Submodel(d.log_λ_obs, n_comp_tel; type=:tel, kwargs...)
 	star = Submodel(d.log_λ_star, n_comp_star; type=:star, kwargs...)
-	rv = Submodel(d.log_λ_star, 1; include_mean=false, kwargs...)
-
 	n_obs = size(d.log_λ_obs, 2)
+	rv = zeros(n_obs)
+
 	# star_dop = [median(d.log_λ_star[:, i] - d.log_λ_obs[:, i]) for i in 1:n_obs]
+	bary_rvs = D_to_rv.([median(d.log_λ_star[:, i] - d.log_λ_obs[:, i]) for i in 1:n_obs])
 	# star_log_λ_tel = ones(length(star.log_λ), n_obs)
 	# for i in 1:n_obs
 	# 	star_log_λ_tel[:, i] .= star.log_λ .+ star_dop[i]
 	# end
 	todo = Dict([(:reg_improved, false), (:downsized, false), (:optimized, false), (:err_estimated, false)])
 	metadata = Dict([(:todo, todo), (:instrument, instrument), (:order, order), (:star, star)])
+	b2o = StellarInterpolationHelper(star.log_λ, bary_rvs, d.log_λ_obs)
 	if oversamp
-		b2o = oversamp_interp_helper(d.log_λ_star_bounds, star.log_λ)
+		# b2o = oversamp_interp_helper(d.log_λ_star_bounds, star.log_λ)
 		t2o = oversamp_interp_helper(d.log_λ_obs_bounds, tel.log_λ)
 	else
-		b2o = undersamp_interp_helper(d.log_λ_star, star.log_λ)
+		# b2o = undersamp_interp_helper(d.log_λ_star, star.log_λ)
 		t2o = undersamp_interp_helper(d.log_λ_obs, tel.log_λ)
 	end
-	return OrderModel(tel, star, rv, copy(default_reg_tel), copy(default_reg_star), b2o, t2o, metadata, n_obs)
+	return OrderModel(tel, star, rv, copy(default_reg_tel), copy(default_reg_star), b2o, bary_rvs, t2o, metadata, n_obs)
 end
-Base.copy(om::OrderModel) = OrderModel(copy(om.tel), copy(om.star), copy(om.rv), copy(om.reg_tel), copy(om.reg_star), om.b2o, om.t2o, copy(om.metadata), om.n)
+Base.copy(om::OrderModel) = OrderModel(copy(om.tel), copy(om.star), copy(om.rv), copy(om.reg_tel), copy(om.reg_star), om.b2o, om.bary_rvs, om.t2o, copy(om.metadata), om.n)
 (om::OrderModel)(inds::AbstractVecOrMat) =
 	OrderModel(om.tel(inds), om.star(inds), om.rv(inds), om.reg_tel,
-		om.reg_star, view(om.b2o, inds), view(om.t2o, inds), copy(om.metadata), length(inds))
+		om.reg_star, view(om.b2o, inds), view(om.bary_rvs, inds), view(om.t2o, inds), copy(om.metadata), length(inds))
 function rm_dict!(d::Dict)
 	for (key, value) in d
 		delete!(d, key)
@@ -493,7 +501,8 @@ function _eval_lm_vec(om::OrderModel, v)
 end
 
 # I have no idea why the negative sign needs to be here
-rvs(model::OrderModel) = vec(model.rv.lm.s .* -light_speed_nu)
+# rvs(model::OrderModel) = vec(model.rv.lm.s .* -light_speed_nu)
+rvs(model::OrderModel) = model.rv
 
 function downsize(lm::FullLinearModel, n_comp::Int)
 	if n_comp > 0
@@ -528,8 +537,8 @@ Nabla.∇(::typeof(spectra_interp), ::Type{Arg{1}}, _, y, ȳ, model, interp_hel
 	hcat([interp_helper[i]' * view(ȳ, :, i) for i in 1:size(model, 2)]...)
 
 tel_model(om::OrderModel; lm=om.tel.lm::LinearModel) = spectra_interp(lm(), om.t2o)
-star_model(om::OrderModel; lm=om.star.lm::LinearModel) = spectra_interp(lm(), om.b2o)
-rv_model(om::OrderModel; lm=om.rv.lm::LinearModel) = spectra_interp(lm(), om.b2o)
+star_model(om::OrderModel; lm=om.star.lm::LinearModel) = spectra_interp(lm(), om.rv .+ om.bary_rvs, om.b2o)
+# rv_model(om::OrderModel; lm=om.rv.lm::LinearModel) = spectra_interp(lm(), om.b2o)
 
 
 function fix_FullLinearModel_s!(flm, min::Number, max::Number)
@@ -722,8 +731,8 @@ function initialize!(om::OrderModel, d::Data; min::Number=0, max::Number=1.2,
 
 	om.star.lm.M .= view(M_star, :, 2:size(M_star, 2))
 	om.star.lm.s[:] = view(s_star, 2:size(s_star, 1), :)
-	om.rv.lm.M .= view(M_star, :, 1)
-	om.rv.lm.s[:] = view(s_star, 1, :)
+	# om.rv.lm.M .= view(M_star, :, 1)
+	om.rv[:] .= view(s_star, 1, :) .* -light_speed_nu
 
 	if is_time_variable(om.tel)
 		# telluric model with updated stellar template
@@ -793,37 +802,35 @@ tel_prior(lm, om::OrderModel) = model_prior(lm, om, :tel)
 star_prior(om::OrderModel) = star_prior(om.star.lm, om)
 star_prior(lm, om::OrderModel) = model_prior(lm, om, :star)
 
-total_model(tel, star, rv) = tel .* (star .+ rv)
+total_model(tel, star) = tel .* star
 
 struct Output{T<:Number, AM<:AbstractMatrix{T}, M<:Matrix{T}}
 	tel::AM
 	star::AM
-	rv::AM
 	total::M
-	function Output(tel::AM, star::AM, rv::AM, total::M) where {T<:Number, AM<:AbstractMatrix{T}, M<:Matrix{T}}
-		@assert size(tel) == size(star) == size(rv) == size(total)
-		new{T, AM, M}(tel, star, rv, total)
+	function Output(tel::AM, star::AM, total::M) where {T<:Number, AM<:AbstractMatrix{T}, M<:Matrix{T}}
+		@assert size(tel) == size(star) == size(total)
+		new{T, AM, M}(tel, star, total)
 	end
 end
 function Output(om::OrderModel, d::Data)
 	@assert size(om.b2o[1], 1) == size(d.flux, 1)
 	return Output(tel_model(om), star_model(om), rv_model(om), d)
 end
-Output(tel, star, rv, d::GenericData) =
-	Output(tel, star, rv, total_model(tel, star, rv))
-Output(tel, star, rv, d::LSFData) =
-	Output(tel, star, rv, d.lsf * total_model(tel, star, rv))
-Base.copy(o::Output) = Output(copy(tel), copy(star), copy(rv))
+Output(tel, star, d::GenericData) =
+	Output(tel, star, total_model(tel, star))
+Output(tel, star, d::LSFData) =
+	Output(tel, star, d.lsf * total_model(tel, star))
+Base.copy(o::Output) = Output(copy(tel), copy(star))
 function recalc_total!(o::Output, d::GenericData)
-	o.total .= total_model(o.tel, o.star, o.rv)
+	o.total .= total_model(o.tel, o.star)
 end
 function recalc_total!(o::Output, d::LSFData)
-	o.total .= d.lsf * total_model(o.tel, o.star, o.rv)
+	o.total .= d.lsf * total_model(o.tel, o.star)
 end
 function Output!(o::Output, om::OrderModel, d::Data)
 	o.tel .= tel_model(om)
 	o.star .= star_model(om)
-	o.rv .= rv_model(om)
 	recalc_total!(o, d)
 end
 
