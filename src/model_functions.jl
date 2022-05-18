@@ -78,17 +78,18 @@ function StellarInterpolationHelper(
 	# @assert some issorted thing?
 	return StellarInterpolationHelper(log_λ_obs - (view(model_log_λ, lower_inds)), model_log_λ.step.hi, lower_inds_adj, lower_inds_adj .+ 1)
 end
-function (sih::StellarInterpolationHelper)(inds::AbstractVecOrMat)
-	# lower_inds_adj[:, i] .= ((i - 1) * len_model) .+ view(lower_inds, :, i)
-
-	# lower_inds_adj[:, i] .= ((i - 1) * len_model) .+ (view(lower_inds, :, i)
-	len_model = length(model_log_λ)
+function (sih::StellarInterpolationHelper)(inds::AbstractVecOrMat, len_model::Int)
 	lower_inds = copy(sih.lower_inds)
+	for i in 1:length(inds)
+		j = inds[i]
+		lower_inds[:, j] .+= (i - j) * len_model
+	end
 	return StellarInterpolationHelper(
 		view(sih.log_λ_obs_m_model_log_λ_lo, :, inds),
 		sih.model_log_λ_hi_m_lo,
-		view(sih.lower_inds, :, inds),
-		view(sih.lower_inds_p1, :, inds))
+		lower_inds[:, inds],
+		lower_inds[:, inds] .+ 1)
+end
 # Base.copy(sih::StellarInterpolationHelper) = sih
 
 function spectra_interp(model_flux::AbstractMatrix, rvs::AbstractVector, sih::StellarInterpolationHelper)
@@ -450,7 +451,7 @@ end
 Base.copy(om::OrderModel) = OrderModel(copy(om.tel), copy(om.star), copy(om.rv), copy(om.reg_tel), copy(om.reg_star), om.b2o, om.bary_rvs, om.t2o, copy(om.metadata), om.n)
 (om::OrderModel)(inds::AbstractVecOrMat) =
 	OrderModel(om.tel(inds), om.star(inds), view(om.rv, inds), om.reg_tel,
-		om.reg_star, om.b2o(inds), view(om.bary_rvs, inds), view(om.t2o, inds), copy(om.metadata), length(inds))
+		om.reg_star, om.b2o(inds, length(om.star.lm.μ)), view(om.bary_rvs, inds), view(om.t2o, inds), copy(om.metadata), length(inds))
 function rm_dict!(d::Dict)
 	for (key, value) in d
 		delete!(d, key)
