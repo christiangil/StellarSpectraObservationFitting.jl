@@ -23,35 +23,6 @@ function D_to_rv(D)
 	return light_speed_nu .* ((1 .- x) ./ (1 .+ x))
 end
 rv_to_D(v) = log.((1 .- v ./ light_speed_nu) ./ (1 .+ v ./ light_speed_nu)) ./ 2
-# function spectra_interp(stellar_model_flux, model_log_λ::AbstractVector{<:Real}, rvs, log_λ_obs::AbstractMatrix)
-# 	n_obs = length(rvs)
-# 	len = size(log_λ_obs, 1)
-# 	lower_inds = Array{Int64}(undef, len)
-# 	ratios = Array{Float64}(undef, len)
-# 	# log_λ_holder = Array{Float64}(undef, len)
-# 	ans = Array{Float64}(undef, len, n_obs)
-# 	len_model = length(model_log_λ)
-# 	for i in 1:n_obs
-# 		# log_λ_holder[:] .= view(log_λ_obs, :, i) .+ rv_to_D(rvs[i])
-# 		log_λ_holder = view(log_λ_obs, :, i) .+ rv_to_D(rvs[i])
-# 		lower_inds[:] .= searchsortednearest(model_log_λ, log_λ_holder; lower=true)
-# 		for j in 1:len
-# 			if lower_inds[j] >= len_model
-# 				lower_inds[j] = len_model - 1
-# 				ratios[j] = 1
-# 			elseif lower_inds[j] < 1
-# 				lower_inds[j] = 1
-# 				ratios[j] = 0
-# 			else
-# 				x0 = model_log_λ[lower_inds[j]]
-# 				x1 = model_log_λ[lower_inds[j] + 1]
-# 				ratios[j] = (log_λ_holder[j] - x0) / (x1 - x0)
-# 			end
-# 		end
-# 		ans[:, i] = (stellar_model_flux[lower_inds, i] .* (1 .- ratios)) + (stellar_model_flux[lower_inds .+ 1, i] .* ratios)
-# 	end
-# 	return ans#, lower_inds, ratios
-# end
 function _lower_inds(model_log_λ::AbstractVector{<:Real}, rvs, log_λ_obs::AbstractMatrix)
 	n_obs = length(rvs)
 	len = size(log_λ_obs, 1)
@@ -69,7 +40,7 @@ function _lower_inds(model_log_λ::AbstractVector{<:Real}, rvs, log_λ_obs::Abst
 				lower_inds[j, i] = 1
 			end
 		end
-		lower_inds_adj[:, i] .+= ((i - 1) * len_model) .+ view(lower_inds, :, i)
+		lower_inds_adj[:, i] .= ((i - 1) * len_model) .+ view(lower_inds, :, i)
 	end
 	return lower_inds, lower_inds_adj
 end
@@ -90,15 +61,36 @@ struct StellarInterpolationHelper{T1<:Real, T2<:Int}
 	lower_inds::AbstractMatrix{T2}
 	lower_inds_p1::AbstractMatrix{T2}
 	function StellarInterpolationHelper(
-		model_log_λ::StepRangeLen,
-		bary_rvs::AbstractVector{T},
-		log_λ_obs::AbstractMatrix{T}) where {T<:Real}
-
-		lower_inds, lower_inds_adj = _lower_inds(model_log_λ, bary_rvs, log_λ_obs)
+		log_λ_obs_m_model_log_λ_lo::AbstractMatrix{T1},
+		model_log_λ_hi_m_lo::T1,
+		lower_inds::AbstractMatrix{T2},
+		lower_inds_p1::AbstractMatrix{T2}) where {T1<:Real, T2<:Int}
 		# @assert some issorted thing?
-		return new{T, Int64}(log_λ_obs - (view(model_log_λ, lower_inds)), model_log_λ.step.hi, lower_inds_adj, lower_inds_adj .+ 1)
+		return new{T1, T2}(log_λ_obs_m_model_log_λ_lo, model_log_λ_hi_m_lo, lower_inds, lower_inds_p1)
 	end
 end
+function StellarInterpolationHelper(
+	model_log_λ::StepRangeLen,
+	bary_rvs::AbstractVector{T},
+	log_λ_obs::AbstractMatrix{T}) where {T<:Real}
+
+	lower_inds, lower_inds_adj = _lower_inds(model_log_λ, bary_rvs, log_λ_obs)
+	# @assert some issorted thing?
+	return StellarInterpolationHelper(log_λ_obs - (view(model_log_λ, lower_inds)), model_log_λ.step.hi, lower_inds_adj, lower_inds_adj .+ 1)
+end
+function (sih::StellarInterpolationHelper)(inds::AbstractVecOrMat)
+	# lower_inds_adj[:, i] .= ((i - 1) * len_model) .+ view(lower_inds, :, i)
+
+	# lower_inds_adj[:, i] .= ((i - 1) * len_model) .+ (view(lower_inds, :, i)
+	len_model = length(model_log_λ)
+	lower_inds = copy(sih.lower_inds)
+	return StellarInterpolationHelper(
+		view(sih.log_λ_obs_m_model_log_λ_lo, :, inds),
+		sih.model_log_λ_hi_m_lo,
+		view(sih.lower_inds, :, inds),
+		view(sih.lower_inds_p1, :, inds))
+# Base.copy(sih::StellarInterpolationHelper) = sih
+
 function spectra_interp(model_flux::AbstractMatrix, rvs::AbstractVector, sih::StellarInterpolationHelper)
 	ratios = (sih.log_λ_obs_m_model_log_λ_lo .+ rv_to_D(rvs)') ./ sih.model_log_λ_hi_m_lo
 	return (view(model_flux, sih.lower_inds).* (1 .- ratios)) + (view(model_flux, sih.lower_inds_p1) .* ratios)
@@ -457,8 +449,8 @@ function OrderModel(
 end
 Base.copy(om::OrderModel) = OrderModel(copy(om.tel), copy(om.star), copy(om.rv), copy(om.reg_tel), copy(om.reg_star), om.b2o, om.bary_rvs, om.t2o, copy(om.metadata), om.n)
 (om::OrderModel)(inds::AbstractVecOrMat) =
-	OrderModel(om.tel(inds), om.star(inds), om.rv(inds), om.reg_tel,
-		om.reg_star, view(om.b2o, inds), view(om.bary_rvs, inds), view(om.t2o, inds), copy(om.metadata), length(inds))
+	OrderModel(om.tel(inds), om.star(inds), view(om.rv, inds), om.reg_tel,
+		om.reg_star, om.b2o(inds), view(om.bary_rvs, inds), view(om.t2o, inds), copy(om.metadata), length(inds))
 function rm_dict!(d::Dict)
 	for (key, value) in d
 		delete!(d, key)
@@ -523,7 +515,7 @@ downsize(m::OrderModel, n_comp_tel::Int, n_comp_star::Int) =
 	OrderModel(
 		downsize(m.tel, n_comp_tel),
 		downsize(m.star, n_comp_star),
-		m.rv, m.reg_tel, m.reg_star, m.b2o, m.t2o, m.metadata, m.n)
+		m.rv, m.reg_tel, m.reg_star, m.b2o, m.bary_rvs, m.t2o, m.metadata, m.n)
 
 spectra_interp(model::AbstractMatrix, interp_helper::AbstractVector{<:_current_matrix_modifier}) =
 	hcat([interp_helper[i] * view(model, :, i) for i in 1:size(model, 2)]...)
@@ -814,8 +806,8 @@ struct Output{T<:Number, AM<:AbstractMatrix{T}, M<:Matrix{T}}
 	end
 end
 function Output(om::OrderModel, d::Data)
-	@assert size(om.b2o[1], 1) == size(d.flux, 1)
-	return Output(tel_model(om), star_model(om), rv_model(om), d)
+	@assert size(om.t2o[1], 1) == size(d.flux, 1)
+	return Output(tel_model(om), star_model(om), d)
 end
 Output(tel, star, d::GenericData) =
 	Output(tel, star, total_model(tel, star))

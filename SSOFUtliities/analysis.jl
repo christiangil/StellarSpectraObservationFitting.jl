@@ -149,7 +149,7 @@ function estimate_errors(mws; save_fn="")
 
 		rvs = SSOF.rvs(model)
 	    n = 50
-	    rv_holder = Array{Float64}(undef, n, length(model.rv.lm.s))
+	    rv_holder = Array{Float64}(undef, n, length(model.rv))
 	    _mws = typeof(mws)(copy(model), copy(data))
 	    _mws_score_finalizer() = SSOF.finalize_scores_setup(_mws)
 	    for i in 1:n
