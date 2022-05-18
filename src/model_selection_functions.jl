@@ -31,8 +31,8 @@ function test_ℓ_for_n_comps_basic(n_comps::Vector, mws_inp::ModelWorkspace; re
     end
     return _loss(mws), total_length(mws)
 end
-function test_ℓ_for_n_comps(n_comps::Vector, mws_inp::ModelWorkspace, times::Vector; return_inters::Bool=false, iter=50, kwargs...)
-    mws, l, len = test_ℓ_for_n_comps_basic(n_comps, mws_inp; return_inters=true)
+function test_ℓ_for_n_comps(n_comps::Vector, mws_inp::ModelWorkspace, times::Vector; iter=50, kwargs...)
+    mws, l, len = test_ℓ_for_n_comps_basic(n_comps, mws_inp; return_inters=true, iter=iter, kwargs...)
     model_rvs = rvs(mws.om)
     return l, len, std(model_rvs), intra_night_std(model_rvs, times)
 end
