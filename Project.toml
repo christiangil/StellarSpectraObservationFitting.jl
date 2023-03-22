@@ -34,9 +34,10 @@ Zygote = "e88e6eb3-aa80-5325-afca-941959d7151f"
 
 [compat]
 DSP = "0.7"
+DataInterpolations = "4"
 ExpectationMaximizationPCA = "0.2"
 Nabla = "< 0.13"
-StatsBase = "0.33"
 SortFilters = "0.1"
+StatsBase = "0.33"
 TemporalGPs = "≥ 0.5"
 Unitful = "1"
